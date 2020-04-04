@@ -30,6 +30,7 @@
 #include "shared/math/line2d.h"
 #include "shared/math/math_util.h"
 #include "shared/util/timer.h"
+#include "shared/math/statistics.h"
 
 #include "config_reader/config_reader.h"
 #include "particle_filter.h"
@@ -41,6 +42,7 @@ using std::endl;
 using std::string;
 using std::swap;
 using std::vector;
+// using std::sqrt;
 using Eigen::Vector2f;
 using Eigen::Vector2i;
 using vector_map::VectorMap;
@@ -64,7 +66,6 @@ ParticleFilter::ParticleFilter() :
     mean_loc(0, 0),
     mean_angle(0) {}
 
-
 void ParticleFilter::GetParticles(vector<Particle>* particles) const {
   *particles = particles_;
 }
@@ -79,13 +80,14 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
                                             vector<Vector2f>* scan_ptr) {
     const Vector2f kLaserLoc(0.2, 0);
     const Vector2f laser_loc = loc + kLaserLoc; //TODO depends on where car is facing
+    // TODO fix by "using each particle’s angle to form the rotation matrix"
     float laser_angle = angle + angle_min;
     float laser_angle_incr = (angle_max - angle_min) / num_ranges;
-    //const float range_diff = range_max - range_min; 
-    
+    //const float range_diff = range_max - range_min;
+
     for (int i = 0; i < num_ranges; i++) {
         //TODO include range_min, range_diff
-        float laser_x = laser_loc.x() + range_max * cos(laser_angle); 
+        float laser_x = laser_loc.x() + range_max * cos(laser_angle);
         float laser_y = laser_loc.y() + range_max * sin(laser_angle);
 
         bool collides = false;
@@ -95,17 +97,15 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
         for (geometry::line2f line : map_.lines) {
             if (line.Intersection(laser_loc, laser_line, &intersection)) {
                 collides = true;
-                float intersection_dist = std::sqrt(Sq(intersection.x() - laser_loc.x()) + Sq(intersection.y() - laser_loc.y()));
+                float intersection_dist = sqrt(Sq(intersection.x() - laser_loc.x()) + Sq(intersection.y() - laser_loc.y()));
                 if (intersection_dist < closest_intersection_dist) {
                     closest_intersection_dist = intersection_dist;
-                    
                 }
-
             }
         }
 
         if (collides) {
-            laser_x = laser_loc.x() + closest_intersection_dist * cos(laser_angle); 
+            laser_x = laser_loc.x() + closest_intersection_dist * cos(laser_angle);
             laser_y = laser_loc.y() + closest_intersection_dist * sin(laser_angle);
             laser_line = Vector2f(laser_x, laser_y);
         }
@@ -121,6 +121,17 @@ void ParticleFilter::Update(const vector<float>& ranges,
                             float angle_min,
                             float angle_max,
                             Particle* p_ptr) {
+      vector<float> predicted_ranges;
+      map_.GetPredictedScan(p_ptr->loc, range_min, range_max, angle_min,
+                                  angle_max, ranges.size(), &predicted_ranges);
+      // compare predicted_ranges with ranges
+      float particle_likelihood = 1;
+      const float stddev = 0.05;
+      for (unsigned i = 0; i < ranges.size(); i+= 10) {
+          float single_ray_prob = statistics::ProbabilityDensityGaussian(ranges[i], predicted_ranges[i], stddev);
+          particle_likelihood *= single_ray_prob;
+      }
+      p_ptr->weight = particle_likelihood;
 }
 
 void ParticleFilter::Resample() {
@@ -131,6 +142,14 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
                                   float range_max,
                                   float angle_min,
                                   float angle_max) {
+    Particle highest_weight_particle = particles_[0];
+    for (Particle& particle : particles_) {
+        Update(ranges, range_min, range_max, angle_min, angle_max, &particle);
+        if (particle.weight > highest_weight_particle.weight) {
+            highest_weight_particle = particle;
+        }
+    }
+    best_guess_particle = highest_weight_particle;
 }
 
 void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
@@ -154,14 +173,15 @@ void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
         for (Particle& particle : particles_) {
             float delta_x_hat = r_delta*cos(particle.angle);
             float delta_y_hat = r_delta*sin(particle.angle);
-            float delta_x = rng_.Gaussian(delta_x_hat, k1*std::sqrt(Sq(delta_x_hat) + Sq(delta_y_hat)) + k2*abs(delta_theta_hat));
-            float delta_y = rng_.Gaussian(delta_y_hat, k1*std::sqrt(Sq(delta_x_hat) + Sq(delta_y_hat)) + k2*abs(delta_theta_hat));
-            float delta_theta = rng_.Gaussian(delta_theta_hat, k3*std::sqrt(Sq(delta_x_hat) + Sq(delta_y_hat)) + k4*abs(delta_theta_hat));
+            float delta_x = rng_.Gaussian(delta_x_hat, k1 * sqrt(Sq(delta_x_hat) + Sq(delta_y_hat)) + k2*abs(delta_theta_hat));
+            float delta_y = rng_.Gaussian(delta_y_hat, k1 * sqrt(Sq(delta_x_hat) + Sq(delta_y_hat)) + k2*abs(delta_theta_hat));
+            float delta_theta = rng_.Gaussian(delta_theta_hat, k3 * sqrt(Sq(delta_x_hat) + Sq(delta_y_hat)) + k4*abs(delta_theta_hat));
             // Check for collision
             bool collides = false;
             Vector2f intersection;
             Vector2f p1 = particle.loc;
-            Vector2f p2 = particle.loc + Vector2f(delta_x,delta_y);
+            Vector2f p2 = particle.loc + Vector2f(delta_x, delta_y);
+
             for (geometry::line2f line : map_.lines) {
                 if (line.Intersection(p1, p2, &intersection)) {
                     collides = true;
@@ -171,10 +191,10 @@ void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
 
             if (collides) {
                 //particle.loc = intersection + ((p1 - intersection) * .2);
-                
+                // TODO particle needs to be "resampled and then updated appropriately"
+            } else {
+               particle.loc = p2;
             }
-            else
-                particle.loc = p2;
 
             particle.angle += delta_theta;
             particle.weight = 1;
@@ -216,8 +236,8 @@ void ParticleFilter::Initialize(const string& map_file,
 }
 
 void ParticleFilter::GetLocation(Eigen::Vector2f* loc, float* angle) const {
-    *loc = mean_loc;
-    *angle = mean_angle;
+    *loc = best_guess_particle.loc;
+    *angle = best_guess_particle.angle;
 }
 
 

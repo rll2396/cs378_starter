@@ -59,7 +59,7 @@ namespace particle_filter {
 config_reader::ConfigReader config_reader_({"config/particle_filter.lua"});
 
 ParticleFilter::ParticleFilter() :
-    particles_(10),
+    particles_(20),
     prev_odom_loc_(0, 0),
     prev_odom_angle_(0),
     odom_initialized_(false),
@@ -127,11 +127,13 @@ void ParticleFilter::Update(const vector<float>& ranges,
       // compare predicted_ranges with ranges
       float particle_likelihood = 1;
       const float stddev = 0.05;
-      for (unsigned i = 0; i < ranges.size(); i+= 10) {
-          float single_ray_prob = statistics::ProbabilityDensityGaussian(ranges[i], predicted_ranges[i], stddev);
-          particle_likelihood *= single_ray_prob;
+      const float gamma = 1;
+      for (unsigned i = 0; i < ranges.size(); i+= 1) {
+          float single_ray_prob = Sq(ranges[i] - predicted_ranges[i])/Sq(stddev);
+          //float single_ray_prob = statistics::ProbabilityDensityGaussian(ranges[i], predicted_ranges[i], stddev);
+          particle_likelihood += single_ray_prob;
       }
-      p_ptr->weight = particle_likelihood;
+      p_ptr->weight = -1*gamma*particle_likelihood;
 }
 
 void ParticleFilter::Resample() {
@@ -142,11 +144,13 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
                                   float range_max,
                                   float angle_min,
                                   float angle_max) {
+    float highest_weight = 0;
     Particle highest_weight_particle = particles_[0];
     for (Particle& particle : particles_) {
         Update(ranges, range_min, range_max, angle_min, angle_max, &particle);
-        if (particle.weight > highest_weight_particle.weight) {
+        if (particle.weight > highest_weight) {
             highest_weight_particle = particle;
+            highest_weight = particle.weight;
         }
     }
     best_guess_particle = highest_weight_particle;

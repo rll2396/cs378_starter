@@ -87,6 +87,16 @@ class ParticleFilter {
                               float angle_max,
                               std::vector<Eigen::Vector2f>* scan);
 
+  // Publish observed LIDAR transformed to frame of best location hypothesis.
+  void GetBestHypothesisScan(const Eigen::Vector2f& loc,
+                              const float angle,
+                              const std::vector<float>& ranges,
+                              float range_min,
+                              float range_max,
+                              float angle_min,
+                              float angle_max,
+                              std::vector<Eigen::Vector2f>* scan);
+
  private:
 
   // List of particles being tracked.

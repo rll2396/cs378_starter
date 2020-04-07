@@ -130,6 +130,26 @@ void PublishPredictedScan() {
   }
 }
 
+void PublishBestHypothesisScan() {
+  const uint32_t kColor = 0x66CCCC;
+  Vector2f robot_loc(0, 0);
+  float robot_angle(0);
+  particle_filter_.GetLocation(&robot_loc, &robot_angle);
+  vector<Vector2f> predicted_scan;
+  particle_filter_.GetBestHypothesisScan(
+      robot_loc,
+      robot_angle,
+      last_laser_msg_.ranges,
+      last_laser_msg_.range_min,
+      last_laser_msg_.range_max,
+      last_laser_msg_.angle_min,
+      last_laser_msg_.angle_max,
+      &predicted_scan);
+  for (const Vector2f& p : predicted_scan) {
+    DrawPoint(p, kColor, vis_msg_);
+  }
+}
+
 void PublishTrajectory() {
   const uint32_t kColor = 0xadadad;
   Vector2f robot_loc(0, 0);
@@ -165,6 +185,7 @@ void PublishVisualization() {
 
   PublishParticles();
   PublishPredictedScan();
+  PublishBestHypothesisScan();
   PublishTrajectory();
   visualization_publisher_.publish(vis_msg_);
 }

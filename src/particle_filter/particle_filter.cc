@@ -78,9 +78,8 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
                                             float angle_min,
                                             float angle_max,
                                             vector<Vector2f>* scan_ptr) {
-    const Vector2f kLaserLoc(0.2, 0);
-    const Vector2f laser_loc = loc + kLaserLoc; //TODO depends on where car is facing
-    // TODO fix by "using each particle’s angle to form the rotation matrix"
+    const Vector2f kLaserLoc(0.2 * cos(angle), 0.2 * sin(angle));
+    const Vector2f laser_loc = loc + kLaserLoc;
     float laser_angle = angle + angle_min;
     float laser_angle_incr = (angle_max - angle_min) / num_ranges;
     //const float range_diff = range_max - range_min;
@@ -136,6 +135,31 @@ void ParticleFilter::Update(const vector<float>& ranges,
       p_ptr->weight = -1*gamma*particle_likelihood;
 }
 
+void ParticleFilter::GetBestHypothesisScan(const Vector2f& loc,
+                                            const float angle,
+                                            const vector<float>& ranges,
+                                            float range_min,
+                                            float range_max,
+                                            float angle_min,
+                                            float angle_max,
+                                            vector<Vector2f>* scan_ptr) {
+    const Vector2f kLaserLoc(0.2 * cos(angle), 0.2 * sin(angle));
+    const Vector2f laser_loc = loc + kLaserLoc; //TODO depends on where car is facing
+    // TODO fix by "using each particle’s angle to form the rotation matrix"
+    float laser_angle = angle + angle_min;
+    float laser_angle_incr = (angle_max - angle_min) / ranges.size();
+    //const float range_diff = range_max - range_min;
+
+    for (uint i = 0; i < ranges.size(); i++) {
+        //TODO include range_min, range_diff
+        float laser_x = laser_loc.x() + ranges[i] * cos(laser_angle);
+        float laser_y = laser_loc.y() + ranges[i] * sin(laser_angle);
+        Vector2f laser_line(laser_x, laser_y);
+        scan_ptr->push_back(laser_line);
+        laser_angle += laser_angle_incr;
+    }
+}
+
 void ParticleFilter::Resample() {
 }
 
@@ -154,6 +178,12 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
         }
     }
     best_guess_particle = highest_weight_particle;
+
+    // draw the car and associated LIDAR scan
+    // visualization::ClearVisualizationMsg(local_viz_msg_);
+    // visualization::DrawCross(best_guess_particle.loc, .1, 0x66CCCC, local_viz_msg_);
+    //
+    // viz_pub_.publish(local_viz_msg_);
 }
 
 void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
@@ -243,6 +273,5 @@ void ParticleFilter::GetLocation(Eigen::Vector2f* loc, float* angle) const {
     *loc = best_guess_particle.loc;
     *angle = best_guess_particle.angle;
 }
-
 
 }  // namespace particle_filter

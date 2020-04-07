@@ -47,7 +47,7 @@ using Eigen::Vector2f;
 using Eigen::Vector2i;
 using vector_map::VectorMap;
 
-DEFINE_double(num_particles, 50, "Number of particles");
+DEFINE_double(num_particles, 100, "Number of particles");
 
 // Fill in the body of these functions and create helpers as needed
 // in order to implement localization using a particle filter.
@@ -59,7 +59,7 @@ namespace particle_filter {
 config_reader::ConfigReader config_reader_({"config/particle_filter.lua"});
 
 ParticleFilter::ParticleFilter() :
-    particles_(20),
+    particles_(100),
     prev_odom_loc_(0, 0),
     prev_odom_angle_(0),
     odom_initialized_(false),
@@ -126,8 +126,8 @@ void ParticleFilter::Update(const vector<float>& ranges,
       // compare predicted_ranges with ranges
       float particle_likelihood = 1;
       const float stddev = 0.05;
-      const float gamma = 1;
-      for (unsigned i = 0; i < ranges.size(); i+= 1) {
+      const float gamma = .1;
+      for (unsigned i = 0; i < ranges.size(); i+= 10) {
           float single_ray_prob = Sq(ranges[i] - predicted_ranges[i])/Sq(stddev);
           //float single_ray_prob = statistics::ProbabilityDensityGaussian(ranges[i], predicted_ranges[i], stddev);
           particle_likelihood += single_ray_prob;
@@ -168,13 +168,11 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
                                   float range_max,
                                   float angle_min,
                                   float angle_max) {
-    float highest_weight = 0;
     Particle highest_weight_particle = particles_[0];
     for (Particle& particle : particles_) {
         Update(ranges, range_min, range_max, angle_min, angle_max, &particle);
-        if (particle.weight > highest_weight) {
+        if (particle.weight > highest_weight_particle.weight) {
             highest_weight_particle = particle;
-            highest_weight = particle.weight;
         }
     }
     best_guess_particle = highest_weight_particle;
@@ -189,10 +187,10 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
 void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
                                      const float odom_angle) {
     //std::cout << odom_angle << "\n";
-    float k1 = 0.1;
-    float k2 = 0.1;
-    float k3 = 0.1;
-    float k4 = 0.1;
+    float k1 = 0.05;
+    float k2 = 0.05;
+    float k3 = 0.05;
+    float k4 = 0.05;
 
     if (odom_initialized_) {
 
@@ -255,8 +253,8 @@ void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
 void ParticleFilter::Initialize(const string& map_file,
                                 const Vector2f& loc,
                                 const float angle) {
-    float k = .25;
-    float k2 = .1;
+    float k = .05;
+    float k2 = .05;
     for (Particle& particle : particles_) {
         float x = rng_.Gaussian(loc.x(), k);
         float y = rng_.Gaussian(loc.y(), k);

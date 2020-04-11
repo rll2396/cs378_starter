@@ -64,7 +64,8 @@ ParticleFilter::ParticleFilter() :
     prev_odom_angle_(0),
     odom_initialized_(false),
     mean_loc(0, 0),
-    mean_angle(0) {}
+    mean_angle(0),
+    updates_since_resample(0) {}
 
 void ParticleFilter::GetParticles(vector<Particle>* particles) const {
   *particles = particles_;
@@ -127,7 +128,7 @@ void ParticleFilter::Update(const vector<float>& ranges,
       // compare predicted_ranges with ranges
       float particle_likelihood = 1;
       const float stddev = 0.05;
-      const float gamma = 1.0;
+      const float gamma = .1;
       for (unsigned i = 0; i < ranges.size(); i+= 10) {
           float single_ray_prob = Sq(ranges[i] - predicted_ranges[i])/Sq(stddev);
           //float single_ray_prob = statistics::ProbabilityDensityGaussian(ranges[i], predicted_ranges[i], stddev);
@@ -162,6 +163,38 @@ void ParticleFilter::GetBestHypothesisScan(const Vector2f& loc,
 }
 
 void ParticleFilter::Resample() {
+    for (Particle& particle : particles_) {
+        particle.weight -= best_guess_particle.weight;
+        particle.weight = exp(particle.weight);
+    }
+    std::vector<Particle> resampled_particles;
+    float W = 0.0;
+    for (Particle& particle : particles_) {
+        W += particle.weight;
+    }
+    for (unsigned int _ = 0; _ < particles_.size(); _++) {
+        float w = 0;
+        float x = rng_.UniformRandom(0, W);
+        for (Particle& particle : particles_) {
+            w += particle.weight;
+            if (w > x) {
+                Particle duplicate_particle(particle);
+                resampled_particles.push_back(duplicate_particle);
+                break;
+            }
+        }
+    }
+    //std::cout << "Orig:\n";
+    //for (Particle& particle : particles_) {
+    //    std::cout << particle.weight << "\n";
+    //}
+    //std::cout << "Resample\n";
+    //for (Particle& particle : resampled_particles) {
+    //    std::cout << particle.weight << "\n";
+    //}
+    //std::cout << "\n";
+    // Is this mem leak?
+    particles_ = resampled_particles;
 }
 
 void ParticleFilter::ObserveLaser(const vector<float>& ranges,
@@ -169,6 +202,7 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
                                   float range_max,
                                   float angle_min,
                                   float angle_max) {
+    Update(ranges, range_min, range_max, angle_min, angle_max, &particles_[0]);
     Particle highest_weight_particle = particles_[0];
     for (Particle& particle : particles_) {
         Update(ranges, range_min, range_max, angle_min, angle_max, &particle);
@@ -177,6 +211,12 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
         }
     }
     best_guess_particle = highest_weight_particle;
+    if (updates_since_resample > 10) {
+        Resample();
+        updates_since_resample = 0;
+    } else {
+        updates_since_resample++;
+    }
 
     // draw the car and associated LIDAR scan
     // visualization::ClearVisualizationMsg(local_viz_msg_);
@@ -188,10 +228,10 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
 void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
                                      const float odom_angle) {
     //std::cout << odom_angle << "\n";
-    float k1 = 0.05;
-    float k2 = 0.05;
-    float k3 = 0.05;
-    float k4 = 0.05;
+    float k1 = .5;
+    float k2 = .5;
+    float k3 = .5;
+    float k4 = .5;
 
     if (odom_initialized_) {
 
@@ -254,8 +294,8 @@ void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
 void ParticleFilter::Initialize(const string& map_file,
                                 const Vector2f& loc,
                                 const float angle) {
-    float k = .05;
-    float k2 = .05;
+    float k = .1;
+    float k2 = .1;
     for (Particle& particle : particles_) {
         float x = rng_.Gaussian(loc.x(), k);
         float y = rng_.Gaussian(loc.y(), k);

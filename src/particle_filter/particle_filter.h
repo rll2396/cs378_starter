@@ -115,6 +115,7 @@ class ParticleFilter {
   Eigen::Vector2f mean_loc;
   Particle best_guess_particle;
   float mean_angle;
+  int updates_since_resample;
 };
 }  // namespace slam
 

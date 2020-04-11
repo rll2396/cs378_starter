@@ -328,7 +328,7 @@ void Navigation::Run() {
         float w1 = .01;
         float w2 = -.2;
         float score = fpl + w1 * clearance + w2 * goal_dist;
-        std::cout << "curv " << curv << " fpl " << fpl << " clearance " << clearance << " goal_dist " << goal_dist << "\n";
+        //std::cout << "curv " << curv << " fpl " << fpl << " clearance " << clearance << " goal_dist " << goal_dist << "\n";
         if (score > best_score) {
             best_score = score;
             best_curv = curv;

@@ -59,7 +59,7 @@ namespace particle_filter {
 config_reader::ConfigReader config_reader_({"config/particle_filter.lua"});
 
 ParticleFilter::ParticleFilter() :
-    particles_(100),
+    particles_(50),
     prev_odom_loc_(0, 0),
     prev_odom_angle_(0),
     odom_initialized_(false),
@@ -121,12 +121,13 @@ void ParticleFilter::Update(const vector<float>& ranges,
                             float angle_max,
                             Particle* p_ptr) {
       vector<float> predicted_ranges;
-      map_.GetPredictedScan(p_ptr->loc, range_min, range_max, angle_min,
-                                  angle_max, ranges.size(), &predicted_ranges);
+      // TODO: does this function wrap angles around for us
+      map_.GetPredictedScan(p_ptr->loc, range_min, range_max, angle_min+p_ptr->angle,
+                                  angle_max+p_ptr->angle, ranges.size(), &predicted_ranges);
       // compare predicted_ranges with ranges
       float particle_likelihood = 1;
       const float stddev = 0.05;
-      const float gamma = .1;
+      const float gamma = 1.0;
       for (unsigned i = 0; i < ranges.size(); i+= 10) {
           float single_ray_prob = Sq(ranges[i] - predicted_ranges[i])/Sq(stddev);
           //float single_ray_prob = statistics::ProbabilityDensityGaussian(ranges[i], predicted_ranges[i], stddev);

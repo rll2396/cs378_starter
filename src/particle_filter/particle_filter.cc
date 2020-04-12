@@ -125,11 +125,11 @@ void ParticleFilter::Update(const vector<float>& ranges,
       map_.GetPredictedScan(p_ptr->loc, range_min, range_max, angle_min + p_ptr->angle,
                                   angle_max + p_ptr->angle, ranges.size(), &predicted_ranges);
       // compare predicted_ranges with ranges
-      float particle_likelihood = 1;
+      float particle_likelihood = 1.0;
       const float stddev = 0.05;
-      const float gamma = .1;
-      const float d_short = 0.5;
-      const float d_long = 0.5;
+      const float gamma = 0.1;
+      const float d_short = 0.3;
+      const float d_long = 0.3;
       for (unsigned i = 0; i < ranges.size(); i += 10) {
           float single_ray_prob = 0;
           if (predicted_ranges[i] >= range_min && predicted_ranges[i] <= range_max) {
@@ -143,7 +143,7 @@ void ParticleFilter::Update(const vector<float>& ranges,
           }
           particle_likelihood += single_ray_prob;
       }
-      p_ptr->weight = -1 * gamma * particle_likelihood;
+      p_ptr->weight = -1.0 * gamma * particle_likelihood;
 }
 
 void ParticleFilter::GetBestHypothesisScan(const Vector2f& loc,
@@ -217,42 +217,33 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
         }
     }
     best_guess_particle = highest_weight_particle;
-
     if (updates_since_resample > 5) {
         Resample();
         updates_since_resample = 0;
     } else {
         updates_since_resample++;
     }
-
-    // draw the car and associated LIDAR scan
-    // visualization::ClearVisualizationMsg(local_viz_msg_);
-    // visualization::DrawCross(best_guess_particle.loc, .1, 0x66CCCC, local_viz_msg_);
-    //
-    // viz_pub_.publish(local_viz_msg_);
 }
 
 void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
                                      const float odom_angle) {
-    //std::cout << odom_angle << "\n";
     float k1 = .5;
     float k2 = .5;
     float k3 = .5;
     float k4 = .5;
 
     if (odom_initialized_) {
-
         float x_total = 0;
         float y_total = 0;
         float sin_theta_total = 0;
         float cos_theta_total = 0;
-
         Vector2f loc_delta = odom_loc - prev_odom_loc_;
-        float r_delta = loc_delta.y()/sin(odom_angle);
+        float r_delta = loc_delta.y() / sin(odom_angle);
         float delta_theta_hat = math_util::AngleDiff(odom_angle, prev_odom_angle_);
+
         for (Particle& particle : particles_) {
-            float delta_x_hat = r_delta*cos(particle.angle);
-            float delta_y_hat = r_delta*sin(particle.angle);
+            float delta_x_hat = r_delta * cos(particle.angle);
+            float delta_y_hat = r_delta * sin(particle.angle);
             float delta_x = rng_.Gaussian(delta_x_hat, k1 * sqrt(Sq(delta_x_hat)
                                 + Sq(delta_y_hat)) + k2 * abs(delta_theta_hat));
             float delta_y = rng_.Gaussian(delta_y_hat, k1 * sqrt(Sq(delta_x_hat)
@@ -273,27 +264,18 @@ void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
             }
 
             if (collides) {
-                //particle.loc = intersection + ((p1 - intersection) * .2);
-                // TODO particle needs to be "resampled and then updated appropriately"
-
-                particle.loc = p2;
+                particle.loc = intersection;
             } else {
-               particle.loc = p2;
+                particle.loc = p2;
             }
 
             particle.angle += delta_theta;
             particle.weight = 1;
-
             x_total += particle.loc.x();
             y_total += particle.loc.y();
             sin_theta_total += sin(particle.angle);
             cos_theta_total += cos(particle.angle);
-
-            //std::cout << particle.loc.x() << " " << particle.loc.y() << "\n";
         }
-
-        //std::cout << x_total / particles_.size() << " " << y_total / particles_.size() << "\n";
-
         mean_loc = Vector2f(x_total / particles_.size(), y_total / particles_.size());
         mean_angle = atan2(sin_theta_total / particles_.size(), cos_theta_total / particles_.size());
     } else {
@@ -315,7 +297,6 @@ void ParticleFilter::Initialize(const string& map_file,
         particle.angle = rng_.Gaussian(angle, k2);
         particle.weight = 1;
     }
-    // Is this needed on actual car?
     odom_initialized_ = false;
     map_.Load(map_file);
 }

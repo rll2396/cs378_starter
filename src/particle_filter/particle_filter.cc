@@ -128,7 +128,7 @@ void ParticleFilter::Update(const vector<float>& ranges,
       float particle_likelihood = 1.0;
       const float stddev = 0.05;
       const float gamma = 0.1;
-      const float d_short = 0.3;
+      const float d_short = 0.2;
       const float d_long = 0.3;
       for (unsigned i = 0; i < ranges.size(); i += 10) {
           float single_ray_prob = 0;
@@ -227,9 +227,9 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
 
 void ParticleFilter::ObserveOdometry(const Vector2f& odom_loc,
                                      const float odom_angle) {
-    float k1 = .5;
+    float k1 = .2;
     float k2 = .5;
-    float k3 = .5;
+    float k3 = .2;
     float k4 = .5;
 
     if (odom_initialized_) {

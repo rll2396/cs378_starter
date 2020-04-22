@@ -64,7 +64,8 @@ Navigation::Navigation(const string& map_file, const double dist, const double c
     robot_omega_(0),
     nav_complete_(true),
     nav_goal_loc_(0, 0),
-    nav_goal_angle_(0) {
+    nav_goal_angle_(0),
+    goal_vertex_id("") {
     drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
       "ackermann_curvature_drive", 1);
     viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
@@ -92,6 +93,10 @@ void Navigation::UpdateLocation(const Eigen::Vector2f& loc, float angle) {
     //std::cout << "UPDATED LOCATION --- " << loc.x() << ", " << loc.y() << "\n";
 }
 
+double Euclid2D(const double x, const double y) {
+    return sqrt(Sq(x) + Sq(y));
+}
+
 void Navigation::MakeGraph() {
     graph.clear();
 
@@ -114,7 +119,8 @@ void Navigation::MakeGraph() {
 
     const float grid_space = 0.5;
     int height = abs(max_map_x - min_map_x) / grid_space;
-    int width = abs(max_map_y - min_map_y)/ grid_space;
+    int width = abs(max_map_y - min_map_y) / grid_space;
+    float min_goal_vert_dist = std::numeric_limits<float>::max();
 
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
@@ -124,39 +130,59 @@ void Navigation::MakeGraph() {
                     if (i_ != i && j_ != j
                             && i_ >= 0 && i_ < height
                             && j_ >= 0 && j_ < width) {
-                        std::string neighbor_id = "" + i_ + j_;
+                        string neighbor_id = "" + i_ + j_;
                         new_vertex->neighbors.push_back(neighbor_id);
                     }
                 }
             }
+            new_vertex->cost = 1;
             new_vertex->id = "" + i + j;
             Vector2f new_vertex_loc(min_map_x + i * 0.5, min_map_y + j * 0.5);
+            if (Euclid2D(new_vertex_loc.x() - nav_goal_loc_.x(),
+                    new_vertex_loc.y() - nav_goal_loc_.y()) < min_goal_vert_dist) {
+                goal_vertex_id = new_vertex->id;
+            }
             new_vertex->loc = new_vertex_loc;
-            graph.insert( std::pair<std::string, Vertex>(new_vertex->id, *new_vertex) );
+            graph.insert(std::pair<string, Vertex>(new_vertex->id, *new_vertex));
             delete new_vertex;
         }
     }
 }
 
 void Navigation::CalculatePath() {
-    //SimpleQueue<std::string, int> frontier = new SimpleQueue;  // Note priority!
-    // frontier.push(start, 0)
-    // parent = {}, parent[start] = Null
-    // cost = {}
-    // cost[start] = 0             // Cost from start
-    //
-    // while not frontier.empty():
-    //   current = frontier.get()  // Get by priority!
-    //   if current == goal:
-    //     break
-    //   for next in neighbors(current):
-    //     new_cost = cost[current] + EdgeCost[current, next]
-    //     if next not in cost or new_cost < cost[next]:
-    //       cost[next] = new_cost  // Insertion or edit
-    //       frontier.put(next, new_cost + heuristic(next))
-    //       parent[next] = current
+    string start_vertex_id = "";
+    float min_start_vert_dist = std::numeric_limits<float>::max();
+    for (const auto &v : graph) {
+        if (Euclid2D(v.second.loc.x() - robot_loc_.x(),
+                v.second.loc.y() - robot_loc_.y()) < min_start_vert_dist) {
+            start_vertex_id = v.first;
+        }
+    }
 
+    SimpleQueue<string, float> frontier;
+    frontier.Push(start_vertex_id, 0);
+    std::map<string, string> parent;
+    parent.insert(std::pair<string, string>(start_vertex_id, NULL));
+    std::map<string, float> cost;
+    cost.insert(std::pair<string, float>(start_vertex_id, 0));
 
+    while (!frontier.Empty()) {
+        string current_id = frontier.Pop();
+        Vertex current = graph[current_id];
+        if (current_id.compare(goal_vertex_id)) {
+            break;
+        }
+        for (string next_id : current.neighbors) {
+            Vertex next = graph[next_id];
+            float new_cost = cost[current_id] + next.cost;
+            if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
+                cost.insert(std::pair<string, float>(next_id, new_cost));
+                frontier.Push(next_id, new_cost + Euclid2D(nav_goal_loc_.x()
+                    - next.loc.x(), nav_goal_loc_.y() - next.loc.y()));
+                parent.insert(std::pair<string, string>(next_id, current_id));
+            }
+        }
+    }
 }
 
 void Navigation::UpdateOdometry(const Vector2f& loc,
@@ -172,9 +198,7 @@ void Navigation::UpdateOdometry(const Vector2f& loc,
     robot_omega_ = ang_vel;
 }
 
-double Euclid2D(const double x, const double y) {
-    return sqrt(Sq(x) + Sq(y));
-}
+
 
 void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
                                    double time) {

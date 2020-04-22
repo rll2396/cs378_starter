@@ -43,7 +43,8 @@ struct PathOption {
 };
 
 struct Vertex {
-	std::string id;
+    float cost;
+    std::string id;
     Eigen::Vector2f loc;
     std::vector<std::string> neighbors;
 };
@@ -105,6 +106,7 @@ class Navigation {
   float nav_goal_angle_;
   // Graph of map.
   std::map<std::string, Vertex> graph;
+  std::string goal_vertex_id;
 
   Eigen::Vector2f GlobalizePoint(const Eigen::Vector2f& local_point);
   void DrawCar(const Eigen::Vector2f& local_point, uint32_t color, float angle);

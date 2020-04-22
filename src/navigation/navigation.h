@@ -109,6 +109,7 @@ class Navigation {
   Eigen::Vector2f GlobalizePoint(const Eigen::Vector2f& local_point);
   void DrawCar(const Eigen::Vector2f& local_point, uint32_t color, float angle);
   void MakeGraph();
+  void CalculatePath();
 };
 
 }  // namespace navigation

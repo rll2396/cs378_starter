@@ -32,6 +32,7 @@
 #include "shared/ros/ros_helpers.h"
 #include "navigation.h"
 #include "visualization/visualization.h"
+#include "navigation/simple_queue.h"
 
 using Eigen::Vector2f;
 using f1tenth_course::AckermannCurvatureDriveMsg;
@@ -94,9 +95,26 @@ void Navigation::UpdateLocation(const Eigen::Vector2f& loc, float angle) {
 void Navigation::MakeGraph() {
     graph.clear();
 
+    float min_map_x = std::numeric_limits<float>::max();
+    float max_map_x = -std::numeric_limits<float>::max();
+    float min_map_y = std::numeric_limits<float>::max();
+    float max_map_y = -std::numeric_limits<float>::max();
+
+    for (geometry::line2f line : map_.lines) {
+        if (line.p0.x() < min_map_x || line.p1.x() < min_map_x) {
+            min_map_x = std::min(line.p0.x(), line.p1.x());
+        } if (line.p0.x() > max_map_x || line.p1.x() > max_map_x) {
+            max_map_x = std::max(line.p0.x(), line.p1.x());
+        } if (line.p0.y() < max_map_x || line.p1.y() < max_map_x) {
+            min_map_y = std::min(line.p0.y(), line.p1.y());
+        } if (line.p0.y() > max_map_x || line.p1.y() > max_map_x) {
+            max_map_y = std::max(line.p0.y(), line.p1.y());
+        }
+    }
+
     const float grid_space = 0.5;
-    int height = abs(nav_goal_loc_.x() - robot_loc_.x()) / grid_space;
-    int width = abs(nav_goal_loc_.y() - robot_loc_.x()) / grid_space;
+    int height = abs(max_map_x - min_map_x) / grid_space;
+    int width = abs(max_map_y - min_map_y)/ grid_space;
 
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
@@ -112,12 +130,33 @@ void Navigation::MakeGraph() {
                 }
             }
             new_vertex->id = "" + i + j;
-            Vector2f new_vertex_loc(i * 0.5, j * 0.5);
+            Vector2f new_vertex_loc(min_map_x + i * 0.5, min_map_y + j * 0.5);
             new_vertex->loc = new_vertex_loc;
             graph.insert( std::pair<std::string, Vertex>(new_vertex->id, *new_vertex) );
             delete new_vertex;
         }
     }
+}
+
+void Navigation::CalculatePath() {
+    //SimpleQueue<std::string, int> frontier = new SimpleQueue;  // Note priority!
+    // frontier.push(start, 0)
+    // parent = {}, parent[start] = Null
+    // cost = {}
+    // cost[start] = 0             // Cost from start
+    //
+    // while not frontier.empty():
+    //   current = frontier.get()  // Get by priority!
+    //   if current == goal:
+    //     break
+    //   for next in neighbors(current):
+    //     new_cost = cost[current] + EdgeCost[current, next]
+    //     if next not in cost or new_cost < cost[next]:
+    //       cost[next] = new_cost  // Insertion or edit
+    //       frontier.put(next, new_cost + heuristic(next))
+    //       parent[next] = current
+
+
 }
 
 void Navigation::UpdateOdometry(const Vector2f& loc,
@@ -202,6 +241,8 @@ void Navigation::DrawCar(const Vector2f& local_point, uint32_t color, float angl
 void Navigation::Run() {
     if (!initialized)
         return;
+
+    CalculatePath();
 
     // constants
     float curv_inc = .2;

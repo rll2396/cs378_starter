@@ -182,7 +182,6 @@ void Navigation::CalculatePath() {
     Vertex goalll = graph[goal_vertex_id];
     std::cout << "goal vertex loc  --- " << goalll.loc.x() << ", " << goalll.loc.y() << "\n";
 
-
     SimpleQueue<string, float> frontier;
     frontier.Push(start_vertex_id, 0);
     std::map<string, string> parent;
@@ -190,34 +189,49 @@ void Navigation::CalculatePath() {
     std::map<string, float> cost;
     cost.insert(std::pair<string, float>(start_vertex_id, 0));
 
+    std::map<string, string> nav_path;
+
     int tr = 0;
-    // TODO check if instersect
+    // TODO check if intersect
     while (!frontier.Empty()) {
 
+        // something causes current to revert to a previous node
         tr++;
         string current_id = frontier.PopLow();
         Vertex current = graph[current_id];
         //std::cout << "neighbors???  " << current.neighbors.size() << "\n";
         if (current_id.compare(goal_vertex_id) == 0) {
             //std::cout << "num iters BREAK --- " << tr << " --- " << "\n";
-            std::cout << "parent size BREAK: " << parent.size() << " --- " << "\n";
+            //std::cout << "parent size BREAK: " << parent.size() << " --- " << "\n";
+            std::cout << "-~- FOUND GOAL VERTEX -~-" << "\n";
+            std::cout << "end on " << tr << " current " << "\n";
             break;
         }
         //std::cout << "neighbors???  " << current.neighbors.size() << "\n";
+
+        int tr1 = 0;
         for (string next_id : current.neighbors) {
+            tr1++;
+
             Vertex next = graph[next_id];
             float edge_weight = Euclid2D(next.loc.x() - current.loc.x(),
                                 next.loc.y() - current.loc.y());
             float new_cost = cost[current_id] + edge_weight;
             if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
-                std::cout << " ! new priority queue insert ! " << "\n";
-                cost.insert(std::pair<string, float>(next_id, new_cost));
-                frontier.Push(next_id, new_cost + Euclid2D(nav_goal_loc_.x() -
+                //std::cout << " ! new priority queue insert ! " << "\n";
+                std::pair<std::map<string, float>::iterator, bool> cost_exists;
+                cost_exists = cost.insert(std::pair<string, float>(next_id, new_cost));
+                if (!cost_exists.second) {
+                    cost[next_id] = new_cost;
+                }
+                float inflation = 1.5;
+                frontier.Push(next_id, new_cost + inflation * Euclid2D(nav_goal_loc_.x() -
                               next.loc.x(), nav_goal_loc_.y() - next.loc.y()));
                 parent.insert(std::pair<string, string>(next_id, current_id));
             }
         }
-        std::cout << "--- END " << tr << " CURRENT --- " << "\n";
+        //std::cout << "number neighbors: " << tr1 << "\n";
+        //std::cout << "--- END " << tr << " CURRENT --- " << "\n";
     }
 
     int tr2 = 0;
@@ -227,7 +241,7 @@ void Navigation::CalculatePath() {
     }
     //
     // std::cout << "parent size --- " << parent.size() << " --- " << "\n";
-    //std::cout << "frontier size --- " << tr2 << " --- " << "\n";
+    std::cout << "Frontier end size: " << tr2 << "\n" << "\n";
 
     // visualize planned path
     for (const auto &v : parent) {
@@ -239,6 +253,15 @@ void Navigation::CalculatePath() {
         Vector2f p2(v2.loc.x(), v2.loc.y());
         visualization::DrawLine(p1, p2, 0xFFB8D3, local_viz_msg_);
     }
+    // for (const auto &v : nav_path) {
+    //     std::string v1_id = v.first;
+    //     Vertex v1 = graph[v1_id];
+    //     Vector2f p1(v1.loc.x(), v1.loc.y());
+    //     std::string v2_id = v.second;
+    //     Vertex v2 = graph[v2_id];
+    //     Vector2f p2(v2.loc.x(), v2.loc.y());
+    //     visualization::DrawLine(p1, p2, 0xFFB8D3, local_viz_msg_);
+    // }
 }
 
 void Navigation::UpdateOdometry(const Vector2f& loc,

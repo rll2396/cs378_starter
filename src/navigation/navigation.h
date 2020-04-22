@@ -43,7 +43,6 @@ struct PathOption {
 };
 
 struct Vertex {
-    float cost;
     std::string id;
     Eigen::Vector2f loc;
     std::vector<std::string> neighbors;

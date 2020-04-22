@@ -131,7 +131,7 @@ void Navigation::MakeGraph() {
             Vertex* new_vertex = new Vertex;
             for (int i_ = i -1; i_ <= i + 1; i_++) {
                 for (int j_ = j -1; j_ <= j + 1; j_++) {
-                    if (i_ != i && j_ != j
+                    if (!(i_ == i && j_ == j)
                             && i_ >= 0 && i_ < height
                             && j_ >= 0 && j_ < width) {
                         string neighbor_id = std::to_string(i_) + std::to_string(j_);
@@ -140,14 +140,15 @@ void Navigation::MakeGraph() {
                     }
                 }
             }
-            new_vertex->cost = 1;
             new_vertex->id = std::to_string(i) + std::to_string(j);
             //std::cout << "i, j --- " << i << ", " << j << "\n";
             //std::cout << "id2 " << new_id << " || " << "\n";
             //std::cout << "id2 " << new_vertex->id << " ** " << "\n";
             Vector2f new_vertex_loc(min_map_x + i * 0.5, min_map_y + j * 0.5);
-            if (Euclid2D(new_vertex_loc.x() - nav_goal_loc_.x(),
-                    new_vertex_loc.y() - nav_goal_loc_.y()) < min_goal_vert_dist) {
+            float goal_dist_diff = Euclid2D(new_vertex_loc.x() - nav_goal_loc_.x(),
+                                   new_vertex_loc.y() - nav_goal_loc_.y());
+            if (goal_dist_diff < min_goal_vert_dist) {
+                min_goal_vert_dist = goal_dist_diff;
                 goal_vertex_id = new_vertex->id;
             }
             new_vertex->loc = new_vertex_loc;
@@ -166,8 +167,10 @@ void Navigation::CalculatePath() {
     string start_vertex_id = "";
     float min_start_vert_dist = std::numeric_limits<float>::max();
     for (const auto &v : graph) {
-        if (Euclid2D(v.second.loc.x() - robot_loc_.x(),
-                v.second.loc.y() - robot_loc_.y()) < min_start_vert_dist) {
+        float start_dist_diff = Euclid2D(v.second.loc.x() - robot_loc_.x(),
+                                v.second.loc.y() - robot_loc_.y());
+        if (start_dist_diff < min_start_vert_dist) {
+            min_start_vert_dist = start_dist_diff;
             start_vertex_id = v.first;
         }
     }
@@ -187,24 +190,29 @@ void Navigation::CalculatePath() {
     std::map<string, float> cost;
     cost.insert(std::pair<string, float>(start_vertex_id, 0));
 
+    int tr = 0;
     // TODO check if instersect
     while (!frontier.Empty()) {
 
+        tr++;
         string current_id = frontier.Pop();
         Vertex current = graph[current_id];
         //std::cout << "neighbors???  " << current.neighbors.size() << "\n";
         if (current_id.compare(goal_vertex_id) == 0) {
+            std::cout << "num iters BREAK --- " << tr << " --- " << "\n";
+            std::cout << "parent size BREAK --- " << parent.size() << " --- " << "\n";
             break;
         }
-        std::cout << "neighbors???  " << current.neighbors.size() << "\n";
+        //std::cout << "neighbors???  " << current.neighbors.size() << "\n";
         for (string next_id : current.neighbors) {
-
             Vertex next = graph[next_id];
-            float new_cost = cost[current_id] + next.cost;
+            float edge_weight = Euclid2D(next.loc.x() - current.loc.x(),
+                                next.loc.y() - current.loc.y());
+            float new_cost = cost[current_id] + edge_weight;
             if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
                 cost.insert(std::pair<string, float>(next_id, new_cost));
-                frontier.Push(next_id, new_cost + Euclid2D(nav_goal_loc_.x()
-                    - next.loc.x(), nav_goal_loc_.y() - next.loc.y()));
+                frontier.Push(next_id, new_cost + Euclid2D(nav_goal_loc_.x() -
+                              next.loc.x(), nav_goal_loc_.y() - next.loc.y()));
                 parent.insert(std::pair<string, string>(next_id, current_id));
             }
         }

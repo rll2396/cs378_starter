@@ -130,19 +130,21 @@ void Navigation::MakeGraph() {
         for (int j = 0; j < width; j++) {
             Vertex* new_vertex = new Vertex;
             for (int i_ = i -1; i_ <= i + 1; i_++) {
-                for (int j_ = i -1; j_ <= i + 1; j_++) {
+                for (int j_ = j -1; j_ <= j + 1; j_++) {
                     if (i_ != i && j_ != j
                             && i_ >= 0 && i_ < height
                             && j_ >= 0 && j_ < width) {
-                        string neighbor_id = "" + i_ + j_;
-                        std::cout << "id1 " << neighbor_id << "\n";
+                        string neighbor_id = std::to_string(i_) + std::to_string(j_);
+                        //std::cout << "id1 " << neighbor_id << "\n";
                         new_vertex->neighbors.push_back(neighbor_id);
                     }
                 }
             }
             new_vertex->cost = 1;
-            new_vertex->id = "" + i + j;
-            std::cout << "id2 " << new_vertex->id << "\n";
+            new_vertex->id = std::to_string(i) + std::to_string(j);
+            //std::cout << "i, j --- " << i << ", " << j << "\n";
+            //std::cout << "id2 " << new_id << " || " << "\n";
+            //std::cout << "id2 " << new_vertex->id << " ** " << "\n";
             Vector2f new_vertex_loc(min_map_x + i * 0.5, min_map_y + j * 0.5);
             if (Euclid2D(new_vertex_loc.x() - nav_goal_loc_.x(),
                     new_vertex_loc.y() - nav_goal_loc_.y()) < min_goal_vert_dist) {
@@ -170,6 +172,14 @@ void Navigation::CalculatePath() {
         }
     }
 
+    std::cout << "start loc  --- " << robot_loc_.x() << ", " << robot_loc_.y() << "\n";
+    Vertex starrrt = graph[start_vertex_id];
+    std::cout << "start vertex loc  --- " << starrrt.loc.x() << ", " << starrrt.loc.y() << "\n";
+    std::cout << "goal loc  --- " << nav_goal_loc_.x() << ", " << nav_goal_loc_.y() << "\n";
+    Vertex goalll = graph[goal_vertex_id];
+    std::cout << "goal vertex loc  --- " << goalll.loc.x() << ", " << goalll.loc.y() << "\n";
+
+
     SimpleQueue<string, float> frontier;
     frontier.Push(start_vertex_id, 0);
     std::map<string, string> parent;
@@ -177,13 +187,18 @@ void Navigation::CalculatePath() {
     std::map<string, float> cost;
     cost.insert(std::pair<string, float>(start_vertex_id, 0));
 
+    // TODO check if instersect
     while (!frontier.Empty()) {
+
         string current_id = frontier.Pop();
         Vertex current = graph[current_id];
-        if (current_id.compare(goal_vertex_id)) {
+        //std::cout << "neighbors???  " << current.neighbors.size() << "\n";
+        if (current_id.compare(goal_vertex_id) == 0) {
             break;
         }
+        std::cout << "neighbors???  " << current.neighbors.size() << "\n";
         for (string next_id : current.neighbors) {
+
             Vertex next = graph[next_id];
             float new_cost = cost[current_id] + next.cost;
             if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
@@ -195,6 +210,7 @@ void Navigation::CalculatePath() {
         }
     }
 
+    std::cout << "parent size --- " << parent.size() << " --- " << "\n";
     // visualize planned path
     for (const auto &v : parent) {
         std::string v1_id = v.first;

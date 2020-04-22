@@ -33,6 +33,7 @@
 #include "navigation.h"
 #include "visualization/visualization.h"
 #include "navigation/simple_queue.h"
+#include "shared/math/line2d.h"
 
 using Eigen::Vector2f;
 using f1tenth_course::AckermannCurvatureDriveMsg;
@@ -218,16 +219,26 @@ void Navigation::CalculatePath() {
                                 next.loc.y() - current.loc.y());
             float new_cost = cost[current_id] + edge_weight;
             if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
-                //std::cout << " ! new priority queue insert ! " << "\n";
-                std::pair<std::map<string, float>::iterator, bool> cost_exists;
-                cost_exists = cost.insert(std::pair<string, float>(next_id, new_cost));
-                if (!cost_exists.second) {
-                    cost[next_id] = new_cost;
+                // make sure path won't collide with map
+                bool collides = false;
+                for (geometry::line2f line : map_.lines) {
+                    if (line.Intersects(current.loc, next.loc)) {
+                        collides = true;
+                        break;
+                    }
                 }
-                float inflation = 1.5;
-                frontier.Push(next_id, new_cost + inflation * Euclid2D(nav_goal_loc_.x() -
-                              next.loc.x(), nav_goal_loc_.y() - next.loc.y()));
-                parent.insert(std::pair<string, string>(next_id, current_id));
+                if (!collides) {
+                    //std::cout << " ! new priority queue insert ! " << "\n";
+                    std::pair<std::map<string, float>::iterator, bool> cost_exists;
+                    cost_exists = cost.insert(std::pair<string, float>(next_id, new_cost));
+                    if (!cost_exists.second) {
+                        cost[next_id] = new_cost;
+                    }
+                    float inflation = 1.5;
+                    frontier.Push(next_id, new_cost + inflation * Euclid2D(nav_goal_loc_.x() -
+                                  next.loc.x(), nav_goal_loc_.y() - next.loc.y()));
+                    parent.insert(std::pair<string, string>(next_id, current_id));
+                }
             }
         }
         //std::cout << "number neighbors: " << tr1 << "\n";
@@ -239,7 +250,7 @@ void Navigation::CalculatePath() {
         tr2++;
         string current_id = frontier.Pop();
     }
-    //
+
     // std::cout << "parent size --- " << parent.size() << " --- " << "\n";
     std::cout << "Frontier end size: " << tr2 << "\n" << "\n";
 
@@ -253,15 +264,6 @@ void Navigation::CalculatePath() {
         Vector2f p2(v2.loc.x(), v2.loc.y());
         visualization::DrawLine(p1, p2, 0xFFB8D3, local_viz_msg_);
     }
-    // for (const auto &v : nav_path) {
-    //     std::string v1_id = v.first;
-    //     Vertex v1 = graph[v1_id];
-    //     Vector2f p1(v1.loc.x(), v1.loc.y());
-    //     std::string v2_id = v.second;
-    //     Vertex v2 = graph[v2_id];
-    //     Vector2f p2(v2.loc.x(), v2.loc.y());
-    //     visualization::DrawLine(p1, p2, 0xFFB8D3, local_viz_msg_);
-    // }
 }
 
 void Navigation::UpdateOdometry(const Vector2f& loc,
@@ -276,8 +278,6 @@ void Navigation::UpdateOdometry(const Vector2f& loc,
     robot_vel_ = vel;
     robot_omega_ = ang_vel;
 }
-
-
 
 void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
                                    double time) {

@@ -217,7 +217,7 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
         }
     }
     best_guess_particle = highest_weight_particle;
-    if (updates_since_resample > 5) {
+    if (updates_since_resample > 3) {
         Resample();
         updates_since_resample = 0;
     } else {

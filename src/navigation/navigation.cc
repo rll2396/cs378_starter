@@ -64,24 +64,60 @@ Navigation::Navigation(const string& map_file, const double dist, const double c
     nav_complete_(true),
     nav_goal_loc_(0, 0),
     nav_goal_angle_(0) {
-  drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
+    drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
       "ackermann_curvature_drive", 1);
-  viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
-  local_viz_msg_ = visualization::NewVisualizationMessage(
+    viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
+    local_viz_msg_ = visualization::NewVisualizationMessage(
       "base_link", "navigation_local");
-  global_viz_msg_ = visualization::NewVisualizationMessage(
+    global_viz_msg_ = visualization::NewVisualizationMessage(
       "map", "navigation_global");
-  InitRosHeader("base_link", &drive_msg_.header);
+    InitRosHeader("base_link", &drive_msg_.header);
+    map_.Load(map_file);
+
+    // Initialize a Map of string & vector of int using initializer_list
+    //graph = { { "HiHoHee", { "hi", "ho", "hee" } }};
 }
 
 void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
     nav_goal_loc_ = loc;
     nav_goal_angle_ = angle;
+    //std::cout << "NEW NAV GOAL --- " << loc.x() << ", " << loc.y() << "\n";
+    MakeGraph();
 }
 
 void Navigation::UpdateLocation(const Eigen::Vector2f& loc, float angle) {
     robot_loc_ = loc;
     robot_angle_ = angle;
+    //std::cout << "UPDATED LOCATION --- " << loc.x() << ", " << loc.y() << "\n";
+}
+
+void Navigation::MakeGraph() {
+    graph.clear();
+
+    const float grid_space = 0.5;
+    int height = abs(nav_goal_loc_.x() - robot_loc_.x()) / grid_space;
+    int width = abs(nav_goal_loc_.y() - robot_loc_.x()) / grid_space;
+
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            Vertex* new_vertex = new Vertex;
+            for (int i_ = i -1; i_ <= i + 1; i_++) {
+                for (int j_ = i -1; j_ <= i + 1; j_++) {
+                    if (i_ != i && j_ != j
+                            && i_ >= 0 && i_ < height
+                            && j_ >= 0 && j_ < width) {
+                        std::string neighbor_id = "" + i_ + j_;
+                        new_vertex->neighbors.push_back(neighbor_id);
+                    }
+                }
+            }
+            new_vertex->id = "" + i + j;
+            Vector2f new_vertex_loc(i * 0.5, j * 0.5);
+            new_vertex->loc = new_vertex_loc;
+            graph.insert( std::pair<std::string, Vertex>(new_vertex->id, *new_vertex) );
+            delete new_vertex;
+        }
+    }
 }
 
 void Navigation::UpdateOdometry(const Vector2f& loc,
@@ -98,7 +134,7 @@ void Navigation::UpdateOdometry(const Vector2f& loc,
 }
 
 double Euclid2D(const double x, const double y) {
-    return std::sqrt(Sq(x) + Sq(y));
+    return sqrt(Sq(x) + Sq(y));
 }
 
 void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
@@ -107,14 +143,14 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
     point_cloud.clear();
     for (Vector2f point : cloud) {
         point_cloud.push_back(point);
-        //Vector2f global_point = globalize_point(point);
+        //Vector2f global_point = GlobalizePoint(point);
         //visualization::DrawCross(global_point, .01, 0xFF0000, local_viz_msg_);
     }
     //viz_pub_.publish(local_viz_msg_);
 }
 
 // TODO: remove this when local visualization is fixed
-Vector2f Navigation::globalize_point(const Vector2f& local_point) {
+Vector2f Navigation::GlobalizePoint(const Vector2f& local_point) {
     float range = Euclid2D(local_point.x(), local_point.y());
     float angle_orig = atan2(local_point.y(), local_point.x());
     float angle = robot_angle_ + angle_orig;
@@ -125,7 +161,6 @@ Vector2f Navigation::globalize_point(const Vector2f& local_point) {
 
 double CalcVDelta(const double v_0, const double t, const double d) {
     double v_delta;
-
     // accelerate for 1 step
     double a_max = 3;
     double a_min = -3;
@@ -152,16 +187,16 @@ double CalcVDelta(const double v_0, const double t, const double d) {
 }
 
 // Uses local message
-void Navigation::draw_car(const Vector2f& local_point, uint32_t color, float angle) {
+void Navigation::DrawCar(const Vector2f& local_point, uint32_t color, float angle) {
     // TODO draw car at angle
     Vector2f p1(local_point.x(), local_point.y() + w + angle);
     Vector2f p2(local_point.x() + h, local_point.y() + w);
     Vector2f p3(local_point.x() + h, local_point.y() - w);
     Vector2f p4(local_point.x(), local_point.y() - w);
-    visualization::DrawLine(globalize_point(p1), globalize_point(p2), color, local_viz_msg_);
-    visualization::DrawLine(globalize_point(p2), globalize_point(p3), color, local_viz_msg_);
-    visualization::DrawLine(globalize_point(p3), globalize_point(p4), color, local_viz_msg_);
-    visualization::DrawLine(globalize_point(p4), globalize_point(p1), color, local_viz_msg_);
+    visualization::DrawLine(GlobalizePoint(p1), GlobalizePoint(p2), color, local_viz_msg_);
+    visualization::DrawLine(GlobalizePoint(p2), GlobalizePoint(p3), color, local_viz_msg_);
+    visualization::DrawLine(GlobalizePoint(p3), GlobalizePoint(p4), color, local_viz_msg_);
+    visualization::DrawLine(GlobalizePoint(p4), GlobalizePoint(p1), color, local_viz_msg_);
 }
 
 void Navigation::Run() {
@@ -177,8 +212,8 @@ void Navigation::Run() {
 
     // visuals
     visualization::ClearVisualizationMsg(local_viz_msg_);
-    draw_car(Vector2f(0,0), 0xFF0000, 0.0);
-    visualization::DrawCross(globalize_point(goal), .1, 0xFF0000, local_viz_msg_);
+    DrawCar(Vector2f(0,0), 0xFF0000, 0.0);
+    visualization::DrawCross(GlobalizePoint(goal), .1, 0xFF0000, local_viz_msg_);
 
     // evaluate possible paths
     float best_curv = 0;
@@ -224,7 +259,7 @@ void Navigation::Run() {
             //     }
             //     g.y() = -g.y();
             // }
-            
+
             // Assumes goal is straight ahead dist meters
             fpl = abs(r) * atan2(dist, abs(r));
 
@@ -239,15 +274,15 @@ void Navigation::Run() {
                     if (point.x() < 0)
                         // point is behind car
                         continue;
-                    
+
                     //std::cout << "point y AFTER  --- " << point.y() << "\n";
                     double r_point = Euclid2D(point.x(), point.y() - r);
                     double theta = atan2(point.x(), abs(r - point.y()));
-                    
+
                     if (r_point >= r_1 && r_point <= r_2 && theta > 0) {
                         // the point is an obstable
-                        //float curv_dist = r * (theta - omega) - 0.001; 
-                        float curv_dist = r * (theta - omega); 
+                        //float curv_dist = r * (theta - omega) - 0.001;
+                        float curv_dist = r * (theta - omega);
                         curv_dist = -curv_dist;
                         if (curv_dist < -0.05)
                             continue;
@@ -261,9 +296,9 @@ void Navigation::Run() {
                         continue;
                     double r_point = Euclid2D(point.x(), point.y() - r);
                     double theta = atan2(point.x(), abs(r - point.y()));
-                    float curv_dist = r * (theta - omega); 
+                    float curv_dist = r * (theta - omega);
                     if (abs(curv_dist) <= fpl && curv_dist <= 0) {
-                        float clear_curr = clearance; 
+                        float clear_curr = clearance;
                         if (r_point > abs(r)) {
                             clear_curr = r_point - r_2;
                         } else if (r_point < abs(r)) {
@@ -285,14 +320,14 @@ void Navigation::Run() {
                     if (point.x() < 0)
                         // point is behind car
                         continue;
-                    
+
                     //std::cout << "point y AFTER  --- " << point.y() << "\n";
                     double r_point = Euclid2D(point.x(), point.y() - r);
                     double theta = atan2(point.x(), r - point.y());
-                    
+
                     if (r_point >= r_1 && r_point <= r_2 && theta > 0) {
                         // the point is an obstable
-                        float curv_dist = r * (theta - omega); 
+                        float curv_dist = r * (theta - omega);
                         if (curv_dist < -.05)
                             continue;
                         fpl = std::min(fpl, curv_dist);
@@ -305,9 +340,9 @@ void Navigation::Run() {
                         continue;
                     double r_point = Euclid2D(point.x(), point.y() - r);
                     double theta = atan2(point.x(), r - point.y());
-                    float curv_dist = r * (theta - omega); 
+                    float curv_dist = r * (theta - omega);
                     if (curv_dist <= fpl && curv_dist >= 0) {
-                        float clear_curr = clearance; 
+                        float clear_curr = clearance;
                         if (r_point > r) {
                             clear_curr = r_point - r_2;
                         } else if (r_point < r) {
@@ -335,7 +370,7 @@ void Navigation::Run() {
             best_fpl = fpl;
         }
         visualization::DrawPathOption(curv, fpl, clearance, local_viz_msg_);
-        //draw_car(dest, 0xFF00FF);
+        //DrawCar(dest, 0xFF00FF);
     }
 
     visualization::DrawPathOption(best_curv, best_fpl, 0, local_viz_msg_);

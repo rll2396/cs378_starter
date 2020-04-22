@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "eigen3/Eigen/Dense"
+#include "vector_map/vector_map.h"
 
 #ifndef NAVIGATION_H
 #define NAVIGATION_H
@@ -39,6 +40,12 @@ struct PathOption {
   Eigen::Vector2f obstruction;
   Eigen::Vector2f closest_point;
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+};
+
+struct Vertex {
+	std::string id;
+    Eigen::Vector2f loc;
+    std::vector<std::string> neighbors;
 };
 
 class Navigation {
@@ -62,6 +69,7 @@ class Navigation {
 
   // Main function called continously from main
   void Run();
+
   // Used to set the next target pose.
   void SetNavGoal(const Eigen::Vector2f& loc, float angle);
 
@@ -70,7 +78,9 @@ class Navigation {
   float safety_margin = 0.10;
   float w = 0.14 + safety_margin;
   float h = 0.43 + safety_margin;
-  
+
+  // Map of the environment.
+  vector_map::VectorMap map_;
   // Last seen point cloud
   std::vector<Eigen::Vector2f> point_cloud;
   // To account for initial values being 0
@@ -87,15 +97,18 @@ class Navigation {
   Eigen::Vector2f odom_loc_;
   // Odometry-reported robot angle.
   float odom_angle_;
-
   // Whether navigation is complete.
   bool nav_complete_;
   // Navigation goal location.
   Eigen::Vector2f nav_goal_loc_;
   // Navigation goal angle.
   float nav_goal_angle_;
-  Eigen::Vector2f globalize_point(const Eigen::Vector2f& local_point);
-  void draw_car(const Eigen::Vector2f& local_point, uint32_t color, float angle);
+  // Graph of map.
+  std::map<std::string, Vertex> graph;
+
+  Eigen::Vector2f GlobalizePoint(const Eigen::Vector2f& local_point);
+  void DrawCar(const Eigen::Vector2f& local_point, uint32_t color, float angle);
+  void MakeGraph();
 };
 
 }  // namespace navigation

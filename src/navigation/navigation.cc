@@ -195,12 +195,12 @@ void Navigation::CalculatePath() {
     while (!frontier.Empty()) {
 
         tr++;
-        string current_id = frontier.Pop();
+        string current_id = frontier.PopLow();
         Vertex current = graph[current_id];
         //std::cout << "neighbors???  " << current.neighbors.size() << "\n";
         if (current_id.compare(goal_vertex_id) == 0) {
-            std::cout << "num iters BREAK --- " << tr << " --- " << "\n";
-            std::cout << "parent size BREAK --- " << parent.size() << " --- " << "\n";
+            //std::cout << "num iters BREAK --- " << tr << " --- " << "\n";
+            std::cout << "parent size BREAK: " << parent.size() << " --- " << "\n";
             break;
         }
         //std::cout << "neighbors???  " << current.neighbors.size() << "\n";
@@ -210,15 +210,25 @@ void Navigation::CalculatePath() {
                                 next.loc.y() - current.loc.y());
             float new_cost = cost[current_id] + edge_weight;
             if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
+                std::cout << " ! new priority queue insert ! " << "\n";
                 cost.insert(std::pair<string, float>(next_id, new_cost));
                 frontier.Push(next_id, new_cost + Euclid2D(nav_goal_loc_.x() -
                               next.loc.x(), nav_goal_loc_.y() - next.loc.y()));
                 parent.insert(std::pair<string, string>(next_id, current_id));
             }
         }
+        std::cout << "--- END " << tr << " CURRENT --- " << "\n";
     }
 
-    std::cout << "parent size --- " << parent.size() << " --- " << "\n";
+    int tr2 = 0;
+    while (!frontier.Empty()) {
+        tr2++;
+        string current_id = frontier.Pop();
+    }
+    //
+    // std::cout << "parent size --- " << parent.size() << " --- " << "\n";
+    //std::cout << "frontier size --- " << tr2 << " --- " << "\n";
+
     // visualize planned path
     for (const auto &v : parent) {
         std::string v1_id = v.first;
@@ -227,7 +237,7 @@ void Navigation::CalculatePath() {
         std::string v2_id = v.second;
         Vertex v2 = graph[v2_id];
         Vector2f p2(v2.loc.x(), v2.loc.y());
-        visualization::DrawLine(p1, p2, 0xFF938F, local_viz_msg_);
+        visualization::DrawLine(p1, p2, 0xFFB8D3, local_viz_msg_);
     }
 }
 
@@ -312,13 +322,6 @@ void Navigation::Run() {
     if (!initialized)
         return;
 
-    if (runs_since_path_calc > 5 && nav_goal_set_) {
-        CalculatePath();
-        runs_since_path_calc = 0;
-    } else {
-        runs_since_path_calc++;
-    }
-
     // constants
     float curv_inc = .2;
     float dist = 3.0;
@@ -330,6 +333,16 @@ void Navigation::Run() {
     visualization::ClearVisualizationMsg(local_viz_msg_);
     DrawCar(Vector2f(0,0), 0xFF0000, 0.0);
     visualization::DrawCross(GlobalizePoint(goal), .1, 0xFF0000, local_viz_msg_);
+
+    if (nav_goal_set_) {
+        visualization::DrawCross(nav_goal_loc_, .15, 0xFFB8D3, local_viz_msg_);
+        if (runs_since_path_calc > 5) {
+            CalculatePath();
+            runs_since_path_calc = 0;
+        } else {
+            runs_since_path_calc++;
+        }
+    }
 
     // evaluate possible paths
     float best_curv = 0;

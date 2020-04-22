@@ -65,7 +65,9 @@ Navigation::Navigation(const string& map_file, const double dist, const double c
     nav_complete_(true),
     nav_goal_loc_(0, 0),
     nav_goal_angle_(0),
-    goal_vertex_id("") {
+    goal_vertex_id(""),
+    runs_since_path_calc(0),
+    nav_goal_set_(false) {
     drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
       "ackermann_curvature_drive", 1);
     viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
@@ -83,7 +85,8 @@ Navigation::Navigation(const string& map_file, const double dist, const double c
 void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
     nav_goal_loc_ = loc;
     nav_goal_angle_ = angle;
-    //std::cout << "NEW NAV GOAL --- " << loc.x() << ", " << loc.y() << "\n";
+    std::cout << "NEW NAV GOAL --- " << loc.x() << ", " << loc.y() << "\n";
+    nav_goal_set_ = true;
     MakeGraph();
 }
 
@@ -105,6 +108,7 @@ void Navigation::MakeGraph() {
     float min_map_y = std::numeric_limits<float>::max();
     float max_map_y = -std::numeric_limits<float>::max();
 
+    // find the bounding x and y values for the graph
     for (geometry::line2f line : map_.lines) {
         if (line.p0.x() < min_map_x || line.p1.x() < min_map_x) {
             min_map_x = std::min(line.p0.x(), line.p1.x());
@@ -131,12 +135,14 @@ void Navigation::MakeGraph() {
                             && i_ >= 0 && i_ < height
                             && j_ >= 0 && j_ < width) {
                         string neighbor_id = "" + i_ + j_;
+                        std::cout << "id1 " << neighbor_id << "\n";
                         new_vertex->neighbors.push_back(neighbor_id);
                     }
                 }
             }
             new_vertex->cost = 1;
             new_vertex->id = "" + i + j;
+            std::cout << "id2 " << new_vertex->id << "\n";
             Vector2f new_vertex_loc(min_map_x + i * 0.5, min_map_y + j * 0.5);
             if (Euclid2D(new_vertex_loc.x() - nav_goal_loc_.x(),
                     new_vertex_loc.y() - nav_goal_loc_.y()) < min_goal_vert_dist) {
@@ -147,9 +153,14 @@ void Navigation::MakeGraph() {
             delete new_vertex;
         }
     }
+
+    std::cout << "graph size? " << graph.size()<< "\n";
+
+    CalculatePath();
 }
 
 void Navigation::CalculatePath() {
+    // find the closest vertex to the starting point
     string start_vertex_id = "";
     float min_start_vert_dist = std::numeric_limits<float>::max();
     for (const auto &v : graph) {
@@ -162,7 +173,7 @@ void Navigation::CalculatePath() {
     SimpleQueue<string, float> frontier;
     frontier.Push(start_vertex_id, 0);
     std::map<string, string> parent;
-    parent.insert(std::pair<string, string>(start_vertex_id, NULL));
+    parent.insert(std::pair<string, string>(start_vertex_id, ""));
     std::map<string, float> cost;
     cost.insert(std::pair<string, float>(start_vertex_id, 0));
 
@@ -182,6 +193,17 @@ void Navigation::CalculatePath() {
                 parent.insert(std::pair<string, string>(next_id, current_id));
             }
         }
+    }
+
+    // visualize planned path
+    for (const auto &v : parent) {
+        std::string v1_id = v.first;
+        Vertex v1 = graph[v1_id];
+        Vector2f p1(v1.loc.x(), v1.loc.y());
+        std::string v2_id = v.second;
+        Vertex v2 = graph[v2_id];
+        Vector2f p2(v2.loc.x(), v2.loc.y());
+        visualization::DrawLine(p1, p2, 0xFF938F, local_viz_msg_);
     }
 }
 
@@ -266,7 +288,12 @@ void Navigation::Run() {
     if (!initialized)
         return;
 
-    CalculatePath();
+    if (runs_since_path_calc > 5 && nav_goal_set_) {
+        CalculatePath();
+        runs_since_path_calc = 0;
+    } else {
+        runs_since_path_calc++;
+    }
 
     // constants
     float curv_inc = .2;

@@ -107,6 +107,8 @@ class Navigation {
   // Graph of map.
   std::map<std::string, Vertex> graph;
   std::string goal_vertex_id;
+  int runs_since_path_calc;
+  bool nav_goal_set_;
 
   Eigen::Vector2f GlobalizePoint(const Eigen::Vector2f& local_point);
   void DrawCar(const Eigen::Vector2f& local_point, uint32_t color, float angle);

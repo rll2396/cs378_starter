@@ -109,6 +109,7 @@ class Navigation {
   int runs_since_path_calc;
   bool nav_goal_set_;
 
+  std::string GetClosestVertex(const Eigen::Vector2f point);
   Eigen::Vector2f GlobalizePoint(const Eigen::Vector2f& local_point);
   void DrawCar(const Eigen::Vector2f& local_point, uint32_t color, float angle);
   void MakeGraph();

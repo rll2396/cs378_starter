@@ -78,9 +78,6 @@ Navigation::Navigation(const string& map_file, const double dist, const double c
       "map", "navigation_global");
     InitRosHeader("base_link", &drive_msg_.header);
     map_.Load(map_file);
-
-    // Initialize a Map of string & vector of int using initializer_list
-    //graph = { { "HiHoHee", { "hi", "ho", "hee" } }};
 }
 
 double Euclid2D(const double x, const double y) {
@@ -115,7 +112,6 @@ void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
 void Navigation::UpdateLocation(const Eigen::Vector2f& loc, float angle) {
     robot_loc_ = loc;
     robot_angle_ = angle;
-    //std::cout << "UPDATED LOCATION --- " << loc.x() << ", " << loc.y() << "\n";
 }
 
 void Navigation::MakeGraph() {
@@ -132,22 +128,21 @@ void Navigation::MakeGraph() {
             min_map_x = std::min(line.p0.x(), line.p1.x());
         } if (line.p0.x() > max_map_x || line.p1.x() > max_map_x) {
             max_map_x = std::max(line.p0.x(), line.p1.x());
-        } if (line.p0.y() < max_map_x || line.p1.y() < max_map_x) {
+        } if (line.p0.y() < min_map_y || line.p1.y() < min_map_y) {
             min_map_y = std::min(line.p0.y(), line.p1.y());
-        } if (line.p0.y() > max_map_x || line.p1.y() > max_map_x) {
+        } if (line.p0.y() > max_map_y || line.p1.y() > max_map_y) {
             max_map_y = std::max(line.p0.y(), line.p1.y());
         }
     }
 
-    // TODO: weird edges when grid space is small.
-    const float grid_space = 1.5;
+    const float grid_space = .5;
     int height = abs(max_map_x - min_map_x) / grid_space;
     int width = abs(max_map_y - min_map_y) / grid_space;
 
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             Vertex* new_vertex = new Vertex;
-            new_vertex->id = std::to_string(i) + std::to_string(j);
+            new_vertex->id = std::to_string(i) + "," + std::to_string(j);
             Vector2f new_vertex_loc(min_map_x + i * grid_space, min_map_y + j * grid_space);
             for (int i_ = i -1; i_ <= i + 1; i_++) {
                 for (int j_ = j -1; j_ <= j + 1; j_++) {
@@ -164,7 +159,7 @@ void Navigation::MakeGraph() {
                             }
                         }
                         if (!collides) {
-                            string neighbor_id = std::to_string(i_) + std::to_string(j_);
+                            string neighbor_id = std::to_string(i_) + "," + std::to_string(j_);
                             //std::cout << "id1 " << neighbor_id << "\n";
                             new_vertex->neighbors.push_back(neighbor_id);
                         }
@@ -202,7 +197,6 @@ void Navigation::CalculatePath() {
     std::map<string, string> nav_path;
 
     int tr = 0;
-    // TODO check if intersect
     while (!frontier.Empty()) {
 
         // something causes current to revert to a previous node
@@ -256,7 +250,7 @@ void Navigation::CalculatePath() {
     // visualize planned path
     for (string v = goal_vertex_id; v.compare(start_vertex_id) != 0; v = parent[v]) {
         if (parent[v].compare("") == 0) {
-            std::cout << "parent was empty\n";
+            //std::cout << "parent was empty\n";
             break;
         }
         Vertex v1 = graph[v];
@@ -265,13 +259,6 @@ void Navigation::CalculatePath() {
         Vector2f p2(v2.loc.x(), v2.loc.y());
         visualization::DrawLine(p1, p2, 0x11FF11, local_viz_msg_);
     }
-    //for (const auto &v : graph) {
-    //    Vector2f p1 = v.second.loc;
-    //    for (const auto &v2 : v.second.neighbors) {
-    //        Vector2f p2 = graph[v2].loc;
-    //        visualization::DrawLine(p1, p2, 0x111111, local_viz_msg_);
-    //    }
-    //}
 }
 
 void Navigation::UpdateOdometry(const Vector2f& loc,

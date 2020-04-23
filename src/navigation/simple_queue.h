@@ -76,18 +76,6 @@ class SimpleQueue {
     return v;
   }
 
-  // Retreive the value with the highest priority.
-  Value PopLow() {
-    if (values_.empty()) {
-      fprintf(stderr, "ERROR: Pop() called on an empty queue!\n");
-      exit(1);
-    }
-    Sort();
-    const Value v = values_.front().first;
-    values_.resize(values_.size() - 1);
-    return v;
-  }
-
   // Returns true iff the priority queue is empty.
   bool Empty() {
     return values_.empty();

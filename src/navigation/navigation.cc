@@ -101,7 +101,6 @@ string Navigation::GetClosestVertex(const Vector2f point) {
 void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
     nav_goal_loc_ = loc;
     nav_goal_angle_ = angle;
-    std::cout << "NEW NAV GOAL --- " << loc.x() << ", " << loc.y() << "\n";
     if (!nav_goal_set_) {
         nav_goal_set_ = true;
         MakeGraph();
@@ -177,15 +176,7 @@ void Navigation::MakeGraph() {
 }
 
 void Navigation::CalculatePath() {
-    // find the closest vertex to the starting point
     string start_vertex_id = GetClosestVertex(robot_loc_);
-
-    //std::cout << "start loc  --- " << robot_loc_.x() << ", " << robot_loc_.y() << "\n";
-    //Vertex starrrt = graph[start_vertex_id];
-    //std::cout << "start vertex loc  --- " << starrrt.loc.x() << ", " << starrrt.loc.y() << "\n";
-    //std::cout << "goal loc  --- " << nav_goal_loc_.x() << ", " << nav_goal_loc_.y() << "\n";
-    //Vertex goalll = graph[goal_vertex_id];
-    //std::cout << "goal vertex loc  --- " << goalll.loc.x() << ", " << goalll.loc.y() << "\n";
 
     SimpleQueue<string, float> frontier;
     frontier.Push(start_vertex_id, 0);
@@ -196,56 +187,34 @@ void Navigation::CalculatePath() {
 
     std::map<string, string> nav_path;
 
-    int tr = 0;
     while (!frontier.Empty()) {
-
-        // something causes current to revert to a previous node
-        tr++;
-        string current_id = frontier.PopLow();
+        string current_id = frontier.Pop();
         Vertex current = graph[current_id];
-        //std::cout << "neighbors???  " << current.neighbors.size() << "\n";
         if (current_id.compare(goal_vertex_id) == 0) {
-            //std::cout << "num iters BREAK --- " << tr << " --- " << "\n";
-            //std::cout << "parent size BREAK: " << parent.size() << " --- " << "\n";
-            std::cout << "-~- FOUND GOAL VERTEX -~-" << "\n";
-            std::cout << "end on " << tr << " current " << "\n";
             break;
         }
-        //std::cout << "neighbors???  " << current.neighbors.size() << "\n";
 
-        int tr1 = 0;
         for (string next_id : current.neighbors) {
-            tr1++;
-
             Vertex next = graph[next_id];
             float edge_weight = Euclid2D(next.loc.x() - current.loc.x(),
                                 next.loc.y() - current.loc.y());
             float new_cost = cost[current_id] + edge_weight;
             if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
-                //std::cout << " ! new priority queue insert ! " << "\n";
-                std::pair<std::map<string, float>::iterator, bool> cost_exists;
-                cost_exists = cost.insert(std::pair<string, float>(next_id, new_cost));
-                if (!cost_exists.second) {
-                    cost[next_id] = new_cost;
-                }
+                //std::pair<std::map<string, float>::iterator, bool> cost_exists;
+                //cost_exists = cost.insert(std::pair<string, float>(next_id, new_cost));
+                //if (!cost_exists.second) {
+                //    cost[next_id] = new_cost;
+                //}
+                cost[next_id] = new_cost;
+                float heuristic = Euclid2D(nav_goal_loc_.x() - next.loc.x(),
+                        nav_goal_loc_.y() - next.loc.y());
                 float inflation = 1.5;
-                frontier.Push(next_id, new_cost + inflation * Euclid2D(nav_goal_loc_.x() -
-                                next.loc.x(), nav_goal_loc_.y() - next.loc.y()));
-                parent.insert(std::pair<string, string>(next_id, current_id));
+                frontier.Push(next_id, -1 * (new_cost + inflation * heuristic));
+                //parent.insert(std::pair<string, string>(next_id, current_id));
+                parent[next_id] = current_id;
             }
         }
-        //std::cout << "number neighbors: " << tr1 << "\n";
-        //std::cout << "--- END " << tr << " CURRENT --- " << "\n";
     }
-
-    int tr2 = 0;
-    while (!frontier.Empty()) {
-        tr2++;
-        string current_id = frontier.Pop();
-    }
-
-    // std::cout << "parent size --- " << parent.size() << " --- " << "\n";
-    //std::cout << "Frontier end size: " << tr2 << "\n" << "\n";
 
     // visualize planned path
     for (string v = goal_vertex_id; v.compare(start_vertex_id) != 0; v = parent[v]) {

@@ -67,7 +67,7 @@ Navigation::Navigation(const string& map_file, const double dist, const double c
     nav_goal_loc_(0, 0),
     nav_goal_angle_(0),
     goal_vertex_id(""),
-    runs_since_path_calc(0),
+    runs_since_path_calc(6),
     nav_goal_set_(false) {
     drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
       "ackermann_curvature_drive", 1);
@@ -216,17 +216,16 @@ void Navigation::CalculatePath() {
         }
     }
 
-    // visualize planned path
+    // extract planned path
+    planned_path.clear();
+    planned_path.push_back(graph[goal_vertex_id].loc);
     for (string v = goal_vertex_id; v.compare(start_vertex_id) != 0; v = parent[v]) {
         if (parent[v].compare("") == 0) {
-            //std::cout << "parent was empty\n";
+            //this probably means no path was found, which shouldn't happen
+            std::cout << "parent was empty\n";
             break;
         }
-        Vertex v1 = graph[v];
-        Vector2f p1(v1.loc.x(), v1.loc.y());
-        Vertex v2 = graph[parent[v]];
-        Vector2f p2(v2.loc.x(), v2.loc.y());
-        visualization::DrawLine(p1, p2, 0x11FF11, local_viz_msg_);
+        planned_path.push_back(graph[parent[v]].loc);
     }
 }
 
@@ -263,6 +262,15 @@ Vector2f Navigation::GlobalizePoint(const Vector2f& local_point) {
     Vector2f global_point(range * cos(angle), range * sin(angle));
     global_point += robot_loc_;
     return global_point;
+}
+
+Vector2f Navigation::LocalizePoint(const Vector2f& global_point) {
+    Vector2f local_point(global_point - robot_loc_);
+    float range = Euclid2D(local_point.x(), local_point.y());
+    float angle_orig = atan2(local_point.y(), local_point.x());
+    float angle = angle_orig - robot_angle_;
+    local_point = Vector2f(range * cos(angle), range * sin(angle));
+    return local_point;
 }
 
 double CalcVDelta(const double v_0, const double t, const double d) {
@@ -311,7 +319,7 @@ void Navigation::Run() {
 
     // constants
     float curv_inc = .2;
-    float dist = 3.0;
+    float dist = 2.0;
 
     // relative goal
     Vector2f goal(dist, 0.0);
@@ -319,17 +327,29 @@ void Navigation::Run() {
     // visuals
     visualization::ClearVisualizationMsg(local_viz_msg_);
     DrawCar(Vector2f(0,0), 0xFF0000, 0.0);
-    visualization::DrawCross(GlobalizePoint(goal), .1, 0xFF0000, local_viz_msg_);
 
     if (nav_goal_set_) {
-        visualization::DrawCross(nav_goal_loc_, .15, 0xFFB8D3, local_viz_msg_);
-        if (runs_since_path_calc > -1) {
+        //visualization::DrawCross(nav_goal_loc_, .15, 0xFFB8D3, local_viz_msg_);
+        if (runs_since_path_calc > 5) {
             CalculatePath();
             runs_since_path_calc = 0;
         } else {
             runs_since_path_calc++;
         }
+        bool found = false;
+        for (unsigned int i = 0; i < planned_path.size()-1; i++) {
+            Vector2f p1 = planned_path[i];
+            Vector2f p2 = planned_path[i+1];
+            float sd = 0;
+            if (!found) {
+                found = geometry::FurthestFreePointCircle(p1, p2, robot_loc_, dist, &sd, &goal);
+                goal = LocalizePoint(goal);
+            }
+            // draw planned path
+            visualization::DrawLine(p1, p2, 0x11FF11, local_viz_msg_);
+        }
     }
+    visualization::DrawCross(GlobalizePoint(goal), .1, 0xFF0000, local_viz_msg_);
 
     // evaluate possible paths
     float best_curv = 0;

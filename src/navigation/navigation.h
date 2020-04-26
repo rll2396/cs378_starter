@@ -105,12 +105,14 @@ class Navigation {
   float nav_goal_angle_;
   // Graph of map.
   std::map<std::string, Vertex> graph;
+  std::vector<Eigen::Vector2f> planned_path;
   std::string goal_vertex_id;
   int runs_since_path_calc;
   bool nav_goal_set_;
 
   std::string GetClosestVertex(const Eigen::Vector2f point);
   Eigen::Vector2f GlobalizePoint(const Eigen::Vector2f& local_point);
+  Eigen::Vector2f LocalizePoint(const Eigen::Vector2f& global_point);
   void DrawCar(const Eigen::Vector2f& local_point, uint32_t color, float angle);
   void MakeGraph();
   void CalculatePath();

@@ -319,16 +319,22 @@ void Navigation::Run() {
 
     // constants
     float curv_inc = .2;
-    float dist = 2.0;
+    float carrot_dist = 2.0;
 
     // relative goal
-    Vector2f goal(dist, 0.0);
+    Vector2f carrot(carrot_dist, 0.0);
 
     // visuals
     visualization::ClearVisualizationMsg(local_viz_msg_);
     DrawCar(Vector2f(0,0), 0xFF0000, 0.0);
 
     if (nav_goal_set_) {
+        // don't move if reached goal
+        if (Euclid2D(robot_loc_.x() - nav_goal_loc_.x(),
+                robot_loc_.y() - nav_goal_loc_.y()) < 0.5) {
+            return;
+        }
+
         //visualization::DrawCross(nav_goal_loc_, .15, 0xFFB8D3, local_viz_msg_);
         if (runs_since_path_calc > 5) {
             CalculatePath();
@@ -337,19 +343,20 @@ void Navigation::Run() {
             runs_since_path_calc++;
         }
         bool found = false;
-        for (unsigned int i = 0; i < planned_path.size()-1; i++) {
+        for (unsigned int i = 0; i < planned_path.size() - 1; i++) {
             Vector2f p1 = planned_path[i];
-            Vector2f p2 = planned_path[i+1];
+            Vector2f p2 = planned_path[i + 1];
             float sd = 0;
             if (!found) {
-                found = geometry::FurthestFreePointCircle(p1, p2, robot_loc_, dist, &sd, &goal);
-                goal = LocalizePoint(goal);
+                found = geometry::FurthestFreePointCircle(p1, p2, robot_loc_, carrot_dist, &sd, &carrot);
+                carrot = LocalizePoint(carrot);
             }
             // draw planned path
             visualization::DrawLine(p1, p2, 0x11FF11, local_viz_msg_);
         }
+        visualization::DrawCross(nav_goal_loc_, .15, 0x8B7FFF, local_viz_msg_);
     }
-    visualization::DrawCross(GlobalizePoint(goal), .1, 0xFF0000, local_viz_msg_);
+    visualization::DrawCross(GlobalizePoint(carrot), .1, 0xFF0000, local_viz_msg_);
 
     // evaluate possible paths
     float best_curv = 0;
@@ -359,7 +366,7 @@ void Navigation::Run() {
     for (float curv = -1; curv <= 1; curv += curv_inc) {
         float fpl;
         float clearance = .2;
-        float goal_dist;
+        float carrot_dist;
         Vector2f dest;
 
         if (abs(curv) < .05) {
@@ -374,11 +381,11 @@ void Navigation::Run() {
                     // if the point is not behind the car and within the path
                     // calculate clearance
                     clearance = std::min(clearance, abs(point.y()) - w);
-            goal_dist = Euclid2D(abs(fpl - goal.x()), goal.y());
+            carrot_dist = Euclid2D(abs(fpl - carrot.x()), carrot.y());
             dest = Vector2f(fpl, 0);
         } else {
             float r = 1.0/curv;
-            Vector2f g(goal.x(), goal.y());
+            Vector2f g(carrot.x(), carrot.y());
 
             // std::vector<Eigen::Vector2f> local_points;
             // for (Vector2f point : point_cloud) {
@@ -494,12 +501,12 @@ void Navigation::Run() {
             float dest_x = r * sin(rad);
             float dest_y = r - r * cos(rad);
             dest = Vector2f(dest_x, dest_y);
-            goal_dist = Euclid2D(dest_x - goal.x(), dest_y - goal.y());
+            carrot_dist = Euclid2D(dest_x - carrot.x(), dest_y - carrot.y());
         }
         float w1 = .01;
-        float w2 = -.2;
-        float score = fpl + w1 * clearance + w2 * goal_dist;
-        //std::cout << "curv " << curv << " fpl " << fpl << " clearance " << clearance << " goal_dist " << goal_dist << "\n";
+        float w2 = -2;
+        float score = fpl + w1 * clearance + w2 * carrot_dist;
+        //std::cout << "curv " << curv << " fpl " << fpl << " clearance " << clearance << " carrot_dist " << carrot_dist << "\n";
         if (score > best_score) {
             best_score = score;
             best_curv = curv;

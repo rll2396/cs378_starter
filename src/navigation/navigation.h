@@ -75,7 +75,7 @@ class Navigation {
 
  private:
 
-  float safety_margin = 0.10;
+  float safety_margin = 0.1;
   float w = 0.14 + safety_margin;
   float h = 0.43 + safety_margin;
 
@@ -110,7 +110,7 @@ class Navigation {
   int runs_since_path_calc;
   bool nav_goal_set_;
 
-  std::string GetClosestVertex(const Eigen::Vector2f point);
+  std::string GetClosestVertexID(const Eigen::Vector2f point);
   Eigen::Vector2f GlobalizePoint(const Eigen::Vector2f& local_point);
   Eigen::Vector2f LocalizePoint(const Eigen::Vector2f& global_point);
   void DrawCar(const Eigen::Vector2f& local_point, uint32_t color, float angle);

@@ -84,18 +84,18 @@ double Euclid2D(const double x, const double y) {
     return sqrt(Sq(x) + Sq(y));
 }
 
-string Navigation::GetClosestVertex(const Vector2f point) {
-    string closest_vertex = "";
+string Navigation::GetClosestVertexID(const Vector2f point) {
+    string closest_vertex_id = "";
     float min_dist = std::numeric_limits<float>::max();
     for (const auto &v : graph) {
         float dist = Euclid2D(v.second.loc.x() - point.x(),
                                 v.second.loc.y() - point.y());
         if (dist < min_dist) {
             min_dist = dist;
-            closest_vertex = v.first;
+            closest_vertex_id = v.first;
         }
     }
-    return closest_vertex;
+    return closest_vertex_id;
 }
 
 void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
@@ -105,7 +105,7 @@ void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
         nav_goal_set_ = true;
         MakeGraph();
     }
-    goal_vertex_id = GetClosestVertex(nav_goal_loc_);
+    goal_vertex_id = GetClosestVertexID(nav_goal_loc_);
 }
 
 void Navigation::UpdateLocation(const Eigen::Vector2f& loc, float angle) {
@@ -134,15 +134,16 @@ void Navigation::MakeGraph() {
         }
     }
 
-    const float grid_space = .5;
+    const float grid_space = 0.3;
     int height = abs(max_map_x - min_map_x) / grid_space;
     int width = abs(max_map_y - min_map_y) / grid_space;
 
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             Vertex* new_vertex = new Vertex;
-            new_vertex->id = std::to_string(i) + "," + std::to_string(j);
+            //new_vertex->id = std::to_string(i) + "," + std::to_string(j);
             Vector2f new_vertex_loc(min_map_x + i * grid_space, min_map_y + j * grid_space);
+            new_vertex->id = std::to_string(new_vertex_loc.x()) + "," + std::to_string(new_vertex_loc.y());
             for (int i_ = i -1; i_ <= i + 1; i_++) {
                 for (int j_ = j -1; j_ <= j + 1; j_++) {
                     if (!(i_ == i && j_ == j)
@@ -158,7 +159,8 @@ void Navigation::MakeGraph() {
                             }
                         }
                         if (!collides) {
-                            string neighbor_id = std::to_string(i_) + "," + std::to_string(j_);
+                            //string neighbor_id = std::to_string(i_) + "," + std::to_string(j_);
+                            string neighbor_id = std::to_string(neighbor_vertex_loc.x()) + "," + std::to_string(neighbor_vertex_loc.y());
                             //std::cout << "id1 " << neighbor_id << "\n";
                             new_vertex->neighbors.push_back(neighbor_id);
                         }
@@ -175,8 +177,64 @@ void Navigation::MakeGraph() {
     }
 }
 
+// bool CollidesWithMap(Vector2f v1, Vector2f v2) {
+//     for (geometry::line2f line : map_.lines) {
+//         if (line.Intersects(v1, v2)) {
+//             return true;
+//         }
+//     }
+//     return false;
+// }
+
+// Vertex JumpPoint(Vertex current, float x_diff, float y_diff) {
+//     float next_x = current.x() + x_diff;
+//     float next_y = current.y() + y_diff;
+//     string next_id = std::to_string(next_x) + "," + std::to_string(next_y);
+//     Vertex goal_vertex = graph[goal_vertex_id];
+//
+//     if (graph.count(next_id) == 0 || next_CollidesWithMap(current.loc, nextloc)) {
+//         return null;
+//     }
+//
+//     if (next_x == goal_vertex.x() && next_y == goal_vertex.y()) {
+//         return goal_vertex;
+//     }
+//
+//     Vertex next_vertex = graph[next_id];
+//     const int max_neighbors = 8;
+//
+//     // going diagonal
+//     if (x_diff != 0 && y_diff != 0) {
+//         if (true) {
+//             // is forced neighbor
+//             return next_vertex;
+//         }
+//
+//         // check horizontal and vertical directions for forced neighbors
+//         if (jump(next_x, next_y, x_diff, 0) != null ||
+//             jump(next_x, next_y, 0, y_diff) != null)
+//         {
+//             return next_vertex;
+//         }
+//     } else if (x_diff != 0) {
+//         // horizontal jumping
+//         if (true) {
+//             // is a forced neighbor
+//             return next_vertex;
+//         }
+//     } else {
+//         // vertical jumping
+//         if (true) {
+//             // is a forced neighbor
+//             return next_vertex;
+//         }
+//     }
+//
+//     return JumpPoint(next_vertex, x_diff, y_diff);
+// }
+
 void Navigation::CalculatePath() {
-    string start_vertex_id = GetClosestVertex(robot_loc_);
+    string start_vertex_id = GetClosestVertexID(robot_loc_);
 
     SimpleQueue<string, float> frontier;
     frontier.Push(start_vertex_id, 0);
@@ -190,6 +248,7 @@ void Navigation::CalculatePath() {
     while (!frontier.Empty()) {
         string current_id = frontier.Pop();
         Vertex current = graph[current_id];
+
         if (current_id.compare(goal_vertex_id) == 0) {
             break;
         }
@@ -200,17 +259,13 @@ void Navigation::CalculatePath() {
                                 next.loc.y() - current.loc.y());
             float new_cost = cost[current_id] + edge_weight;
             if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
-                //std::pair<std::map<string, float>::iterator, bool> cost_exists;
-                //cost_exists = cost.insert(std::pair<string, float>(next_id, new_cost));
-                //if (!cost_exists.second) {
-                //    cost[next_id] = new_cost;
-                //}
+
+                //Vertex jp = JumpPoint(current, next.x() - current.x(), next.y() - current.y());
                 cost[next_id] = new_cost;
                 float heuristic = Euclid2D(nav_goal_loc_.x() - next.loc.x(),
                         nav_goal_loc_.y() - next.loc.y());
-                float inflation = 1.5;
+                float inflation = 1.2;
                 frontier.Push(next_id, -1 * (new_cost + inflation * heuristic));
-                //parent.insert(std::pair<string, string>(next_id, current_id));
                 parent[next_id] = current_id;
             }
         }
@@ -221,8 +276,8 @@ void Navigation::CalculatePath() {
     planned_path.push_back(graph[goal_vertex_id].loc);
     for (string v = goal_vertex_id; v.compare(start_vertex_id) != 0; v = parent[v]) {
         if (parent[v].compare("") == 0) {
-            //this probably means no path was found, which shouldn't happen
-            std::cout << "parent was empty\n";
+            // this  means no path was found, which shouldn't happen
+            std::cout << "Parent was empty!\n";
             break;
         }
         planned_path.push_back(graph[parent[v]].loc);
@@ -318,8 +373,8 @@ void Navigation::Run() {
         return;
 
     // constants
-    float curv_inc = .2;
-    float carrot_dist = 2.0;
+    float curv_inc = 0.2;
+    float carrot_dist = 1.0;
 
     // relative goal
     Vector2f carrot(carrot_dist, 0.0);
@@ -331,12 +386,13 @@ void Navigation::Run() {
     if (nav_goal_set_) {
         // don't move if reached goal
         if (Euclid2D(robot_loc_.x() - nav_goal_loc_.x(),
-                robot_loc_.y() - nav_goal_loc_.y()) < 0.5) {
+            robot_loc_.y() - nav_goal_loc_.y()) < 0.5)
+        {
             return;
         }
 
         //visualization::DrawCross(nav_goal_loc_, .15, 0xFFB8D3, local_viz_msg_);
-        if (runs_since_path_calc > 5) {
+        if (runs_since_path_calc > 3) {
             CalculatePath();
             runs_since_path_calc = 0;
         } else {
@@ -404,7 +460,7 @@ void Navigation::Run() {
             // }
 
             // Assumes goal is straight ahead dist meters
-            fpl = abs(r) * atan2(dist, abs(r));
+            fpl = abs(r) * atan2(carrot_dist, abs(r));
 
             if (r < 0) {
                 // turning right
@@ -503,8 +559,8 @@ void Navigation::Run() {
             dest = Vector2f(dest_x, dest_y);
             carrot_dist = Euclid2D(dest_x - carrot.x(), dest_y - carrot.y());
         }
-        float w1 = .01;
-        float w2 = -2;
+        float w1 = 0.1;
+        float w2 = -7.5;
         float score = fpl + w1 * clearance + w2 * carrot_dist;
         //std::cout << "curv " << curv << " fpl " << fpl << " clearance " << clearance << " carrot_dist " << carrot_dist << "\n";
         if (score > best_score) {

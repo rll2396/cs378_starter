@@ -66,7 +66,7 @@ DEFINE_string(loc_topic, "localization", "Name of ROS topic for localization");
 DEFINE_string(init_topic,
               "initialpose",
               "Name of ROS topic for initialization");
-DEFINE_string(map, "maps/GDC1.txt", "Name of vector map file");
+DEFINE_string(map, "maps/GDC2.txt", "Name of vector map file");
 DEFINE_double(dist, 1.0, "How far to travel");
 DEFINE_double(curv, 0.0, "Curvature of path");
 

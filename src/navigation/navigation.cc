@@ -440,117 +440,66 @@ void Navigation::Run() {
             carrot_dist = Euclid2D(abs(fpl - carrot.x()), carrot.y());
             dest = Vector2f(fpl, 0);
         } else {
-            float r = 1.0/curv;
+            float r = 1.0 / curv;
             Vector2f g(carrot.x(), carrot.y());
+            bool turn_right = false;
 
-            // std::vector<Eigen::Vector2f> local_points;
-            // for (Vector2f point : point_cloud) {
-            //     local_points.push_back(point);
-            // }
-
-            // if turning right, flip all points over x axis
-            // if (r < 0) {
-            //     r = -r;
-            //     for (Vector2f point : local_points) {
-            //         //std::cout << "point y BEFORE --- " << point.y() << " | ";
-            //         //point.y() = -point.y();
-            //         //std::cout << "point y AFTER  --- " << point.y() << "\n";
-            //     }
-            //     g.y() = -g.y();
-            // }
+            if (r < 0) {
+                r = -1 * r;
+                turn_right = true;
+            }
 
             // Assumes goal is straight ahead dist meters
             fpl = abs(r) * atan2(carrot_dist, abs(r));
+            double r_1 = r - w;
+            double r_2 = Euclid2D(r + w, h);
+            double omega = atan2(h, r - w);
 
-            if (r < 0) {
-                // turning right
-                double r_1 = abs(r + w);
-                double r_2 = Euclid2D(r - w, h);
-                double omega = atan2(h, abs(r + w));
-
-                // compute free path length
-                for (Vector2f point : point_cloud) {
-                    if (point.x() < 0)
-                        // point is behind car
-                        continue;
-
-                    //std::cout << "point y AFTER  --- " << point.y() << "\n";
-                    double r_point = Euclid2D(point.x(), point.y() - r);
-                    double theta = atan2(point.x(), abs(r - point.y()));
-
-                    if (r_point >= r_1 && r_point <= r_2 && theta > 0) {
-                        // the point is an obstable
-                        //float curv_dist = r * (theta - omega) - 0.001;
-                        float curv_dist = r * (theta - omega);
-                        curv_dist = -curv_dist;
-                        if (curv_dist < -0.05)
-                            continue;
-                        fpl = std::min(fpl, curv_dist);
-                    }
+            // compute free path length
+            for (Vector2f point : point_cloud) {
+                if (point.x() < 0)
+                    // point is behind car
+                    continue;
+                float point_y = point.y();
+                if (turn_right) {
+                    point_y = -1 * point.y();
                 }
-
-                // find clearance of curved path
-                for (Vector2f point : point_cloud) {
-                    if (point.x() < 0)
-                        continue;
-                    double r_point = Euclid2D(point.x(), point.y() - r);
-                    double theta = atan2(point.x(), abs(r - point.y()));
+                //std::cout << "point y AFTER  --- " << point.y() << "\n";
+                double r_point = Euclid2D(point.x(), point_y - r);
+                double theta = atan2(point.x(), r - point_y);
+                if (r_point >= r_1 && r_point <= r_2 && theta > 0) {
+                    // the point is an obstable
                     float curv_dist = r * (theta - omega);
-                    if (abs(curv_dist) <= fpl && curv_dist <= 0) {
-                        float clear_curr = clearance;
-                        if (r_point > abs(r)) {
-                            clear_curr = r_point - r_2;
-                        } else if (r_point < abs(r)) {
-                            clear_curr = r_1 - r_point;
-                        }
-
-                        //float clear_curr = std::min(r_1 - r_point, r_point - r_2);
-                        clearance = std::min(clearance, clear_curr);
-                    }
-                }
-            } else {
-                // turning left
-                double r_1 = r - w;
-                double r_2 = Euclid2D(r + w, h);
-                double omega = atan2(h, r - w);
-
-                // compute free path length
-                for (Vector2f point : point_cloud) {
-                    if (point.x() < 0)
-                        // point is behind car
+                    if (curv_dist < -.05)
                         continue;
-
-                    //std::cout << "point y AFTER  --- " << point.y() << "\n";
-                    double r_point = Euclid2D(point.x(), point.y() - r);
-                    double theta = atan2(point.x(), r - point.y());
-
-                    if (r_point >= r_1 && r_point <= r_2 && theta > 0) {
-                        // the point is an obstable
-                        float curv_dist = r * (theta - omega);
-                        if (curv_dist < -.05)
-                            continue;
-                        fpl = std::min(fpl, curv_dist);
-                    }
+                    fpl = std::min(fpl, curv_dist);
                 }
+            }
 
-                // find clearance of curved path
-                for (Vector2f point : point_cloud) {
-                    if (point.x() < 0)
-                        continue;
-                    double r_point = Euclid2D(point.x(), point.y() - r);
-                    double theta = atan2(point.x(), r - point.y());
-                    float curv_dist = r * (theta - omega);
-                    if (curv_dist <= fpl && curv_dist >= 0) {
-                        float clear_curr = clearance;
-                        if (r_point > r) {
-                            clear_curr = r_point - r_2;
-                        } else if (r_point < r) {
-                            clear_curr = r_1 - r_point;
-                        }
-
-                        clearance = std::min(clearance, clear_curr);
-                    }
+            // find clearance of curved path
+            for (Vector2f point : point_cloud) {
+                if (point.x() < 0)
+                    continue;
+                float point_y = point.y();
+                if (turn_right) {
+                    point_y = -1 * point.y();
                 }
+                double r_point = Euclid2D(point.x(), point_y - r);
+                double theta = atan2(point.x(), r - point_y);
+                float curv_dist = r * (theta - omega);
+                if (curv_dist <= fpl && curv_dist >= 0) {
+                    float clear_curr = clearance;
+                    if (r_point > r) {
+                        clear_curr = r_point - r_2;
+                    } else if (r_point < r) {
+                        clear_curr = r_1 - r_point;
+                    }
+                    clearance = std::min(clearance, clear_curr);
+                }
+            }
+
+            if (turn_right) {
+                r = -1 * r;
             }
 
             float rad = fpl / r;

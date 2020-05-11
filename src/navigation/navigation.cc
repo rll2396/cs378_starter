@@ -101,7 +101,7 @@ string Navigation::GetClosestVertexID(const Vector2f point) {
     float min_dist = std::numeric_limits<float>::max();
     for (const auto &v : graph) {
         float dist = Euclid2D(v.second.loc.x() - point.x(),
-                                v.second.loc.y() - point.y());
+                              v.second.loc.y() - point.y());
         if (dist < min_dist) {
             min_dist = dist;
             closest_vertex_id = v.first;
@@ -146,7 +146,7 @@ void Navigation::MakeGraph() {
         }
     }
 
-    const float grid_space = 0.36;
+    const float grid_space = 0.4;
     int height = abs(max_map_x - min_map_x) / grid_space;
     int width = abs(max_map_y - min_map_y) / grid_space;
 
@@ -166,17 +166,21 @@ void Navigation::MakeGraph() {
                             Vector2f neighbor_vertex_loc(min_map_x + i_ * grid_space, min_map_y + j_ * grid_space);
                             // make sure edge won't collide with map or isn't too close
                             bool collides = false;
-                            //Vector2f intersection(0.0, 0.0);
-                            //float sd = 0;
-                            for (geometry::line2f line : map_.lines) {
-                                if (line.Intersects(new_vertex_loc, neighbor_vertex_loc)) {
-                                    collides = true;
-                                    break;
+                            string neighbor_id = std::to_string(neighbor_vertex_loc.x()) + "," + std::to_string(neighbor_vertex_loc.y());
+                            if (graph.count(neighbor_id) > 0) {
+                                // first check if this vertex is already a neighbor
+                                std::vector<std::string> n = graph[neighbor_id].neighbors;
+                                collides = std::find(n.begin(), n.end(), new_vertex->id) == n.end();
+                            } else {
+                                for (geometry::line2f line : map_.lines) {
+                                    if (line.Intersects(new_vertex_loc, neighbor_vertex_loc)) {
+                                        collides = true;
+                                        break;
+                                    }
                                 }
                             }
                             if (!collides) {
                                 //string neighbor_id = std::to_string(i_) + "," + std::to_string(j_);
-                                string neighbor_id = std::to_string(neighbor_vertex_loc.x()) + "," + std::to_string(neighbor_vertex_loc.y());
                                 //std::cout << "id1 " << neighbor_id << "\n";
                                 new_vertex->neighbors.push_back(neighbor_id);
                             }
@@ -244,7 +248,6 @@ void Navigation::MakeGraph() {
 
 void Navigation::CalculatePath() {
     string start_vertex_id = GetClosestVertexID(robot_loc_);
-
     SimpleQueue<string, float> frontier;
     frontier.Push(start_vertex_id, 0);
     std::map<string, string> parent;
@@ -269,7 +272,6 @@ void Navigation::CalculatePath() {
                                     next.loc.y() - current.loc.y());
                 float new_cost = cost[current_id] + edge_weight;
                 if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
-
                     //Vertex jp = JumpPoint(current, next.x() - current.x(), next.y() - current.y());
                     cost[next_id] = new_cost;
                     float heuristic = Euclid2D(nav_goal_loc_.x() - next.loc.x(),
@@ -314,10 +316,7 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
     point_cloud.clear();
     for (Vector2f point : cloud) {
         point_cloud.push_back(point);
-        //Vector2f global_point = GlobalizePoint(point);
-        //visualization::DrawCross(global_point, .01, 0xFF0000, local_viz_msg_);
     }
-    //viz_pub_.publish(local_viz_msg_);
 }
 
 Vector2f Navigation::GlobalizePoint(const Vector2f& local_point) {
@@ -518,6 +517,11 @@ void Navigation::Run() {
 
         float w1 = 0.1;
         float w2 = -5;
+        // make fpl weighted negatively if very small to avoid bad paths
+        if (fpl < h && fpl > 0) {
+            float bad_fpl_multiplier = -100;
+            fpl = bad_fpl_multiplier * fpl;
+        }
         float score = fpl + w1 * clearance + w2 * carrot_dist;
         std::cout << "curv " << curv << " fpl " << fpl << " clearance " << clearance << " carrot_dist " << carrot_dist << "\n";
         if (score > best_score) {

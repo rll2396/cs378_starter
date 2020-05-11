@@ -84,6 +84,18 @@ double Euclid2D(const double x, const double y) {
     return sqrt(Sq(x) + Sq(y));
 }
 
+// Note: What if a wall was completely inside the safety circle?
+bool Navigation::TooCloseToWall(const Eigen::Vector2f vertex_loc) {
+    Vector2f intersection(0.0, 0.0);
+    float sd = 0;
+    for (geometry::line2f line : map_.lines) {
+        if (geometry::FurthestFreePointCircle(line.p0, line.p1, vertex_loc, w, &sd, &intersection)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 string Navigation::GetClosestVertexID(const Vector2f point) {
     string closest_vertex_id = "";
     float min_dist = std::numeric_limits<float>::max();
@@ -134,7 +146,7 @@ void Navigation::MakeGraph() {
         }
     }
 
-    const float grid_space = 0.3;
+    const float grid_space = 0.36;
     int height = abs(max_map_x - min_map_x) / grid_space;
     int width = abs(max_map_y - min_map_y) / grid_space;
 
@@ -143,48 +155,45 @@ void Navigation::MakeGraph() {
             Vertex* new_vertex = new Vertex;
             //new_vertex->id = std::to_string(i) + "," + std::to_string(j);
             Vector2f new_vertex_loc(min_map_x + i * grid_space, min_map_y + j * grid_space);
-            new_vertex->id = std::to_string(new_vertex_loc.x()) + "," + std::to_string(new_vertex_loc.y());
-            for (int i_ = i -1; i_ <= i + 1; i_++) {
-                for (int j_ = j -1; j_ <= j + 1; j_++) {
-                    if (!(i_ == i && j_ == j)
-                            && i_ >= 0 && i_ < height
-                            && j_ >= 0 && j_ < width) {
-                        Vector2f neighbor_vertex_loc(min_map_x + i_ * grid_space, min_map_y + j_ * grid_space);
-                        // make sure edge won't collide with map
-                        bool collides = false;
-                        for (geometry::line2f line : map_.lines) {
-                            if (line.Intersects(new_vertex_loc, neighbor_vertex_loc)) {
-                                collides = true;
-                                break;
+
+            if (!TooCloseToWall(new_vertex_loc)) {
+                new_vertex->id = std::to_string(new_vertex_loc.x()) + "," + std::to_string(new_vertex_loc.y());
+                for (int i_ = i -1; i_ <= i + 1; i_++) {
+                    for (int j_ = j -1; j_ <= j + 1; j_++) {
+                        if (!(i_ == i && j_ == j)
+                                && i_ >= 0 && i_ < height
+                                && j_ >= 0 && j_ < width) {
+                            Vector2f neighbor_vertex_loc(min_map_x + i_ * grid_space, min_map_y + j_ * grid_space);
+                            // make sure edge won't collide with map or isn't too close
+                            bool collides = false;
+                            //Vector2f intersection(0.0, 0.0);
+                            //float sd = 0;
+                            for (geometry::line2f line : map_.lines) {
+                                if (line.Intersects(new_vertex_loc, neighbor_vertex_loc)) {
+                                    collides = true;
+                                    break;
+                                }
                             }
-                        }
-                        if (!collides) {
-                            //string neighbor_id = std::to_string(i_) + "," + std::to_string(j_);
-                            string neighbor_id = std::to_string(neighbor_vertex_loc.x()) + "," + std::to_string(neighbor_vertex_loc.y());
-                            //std::cout << "id1 " << neighbor_id << "\n";
-                            new_vertex->neighbors.push_back(neighbor_id);
+                            if (!collides) {
+                                //string neighbor_id = std::to_string(i_) + "," + std::to_string(j_);
+                                string neighbor_id = std::to_string(neighbor_vertex_loc.x()) + "," + std::to_string(neighbor_vertex_loc.y());
+                                //std::cout << "id1 " << neighbor_id << "\n";
+                                new_vertex->neighbors.push_back(neighbor_id);
+                            }
                         }
                     }
                 }
+                //std::cout << "i, j --- " << i << ", " << j << "\n";
+                //std::cout << "id2 " << new_id << " || " << "\n";
+                //std::cout << "id2 " << new_vertex->id << " ** " << "\n";
+                new_vertex->loc = new_vertex_loc;
+                graph.insert(std::pair<string, Vertex>(new_vertex->id, *new_vertex));
             }
-            //std::cout << "i, j --- " << i << ", " << j << "\n";
-            //std::cout << "id2 " << new_id << " || " << "\n";
-            //std::cout << "id2 " << new_vertex->id << " ** " << "\n";
-            new_vertex->loc = new_vertex_loc;
-            graph.insert(std::pair<string, Vertex>(new_vertex->id, *new_vertex));
             delete new_vertex;
         }
     }
 }
 
-// bool CollidesWithMap(Vector2f v1, Vector2f v2) {
-//     for (geometry::line2f line : map_.lines) {
-//         if (line.Intersects(v1, v2)) {
-//             return true;
-//         }
-//     }
-//     return false;
-// }
 
 // Vertex JumpPoint(Vertex current, float x_diff, float y_diff) {
 //     float next_x = current.x() + x_diff;
@@ -254,19 +263,21 @@ void Navigation::CalculatePath() {
         }
 
         for (string next_id : current.neighbors) {
-            Vertex next = graph[next_id];
-            float edge_weight = Euclid2D(next.loc.x() - current.loc.x(),
-                                next.loc.y() - current.loc.y());
-            float new_cost = cost[current_id] + edge_weight;
-            if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
+            if (graph.count(next_id) > 0) {
+                Vertex next = graph[next_id];
+                float edge_weight = Euclid2D(next.loc.x() - current.loc.x(),
+                                    next.loc.y() - current.loc.y());
+                float new_cost = cost[current_id] + edge_weight;
+                if (cost.count(next_id) == 0 || new_cost < cost[next_id]) {
 
-                //Vertex jp = JumpPoint(current, next.x() - current.x(), next.y() - current.y());
-                cost[next_id] = new_cost;
-                float heuristic = Euclid2D(nav_goal_loc_.x() - next.loc.x(),
-                        nav_goal_loc_.y() - next.loc.y());
-                float inflation = 1.2;
-                frontier.Push(next_id, -1 * (new_cost + inflation * heuristic));
-                parent[next_id] = current_id;
+                    //Vertex jp = JumpPoint(current, next.x() - current.x(), next.y() - current.y());
+                    cost[next_id] = new_cost;
+                    float heuristic = Euclid2D(nav_goal_loc_.x() - next.loc.x(),
+                            nav_goal_loc_.y() - next.loc.y());
+                    float inflation = 1.2;
+                    frontier.Push(next_id, -1 * (new_cost + inflation * heuristic));
+                    parent[next_id] = current_id;
+                }
             }
         }
     }
@@ -309,7 +320,6 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
     //viz_pub_.publish(local_viz_msg_);
 }
 
-// TODO: remove this when local visualization is fixed
 Vector2f Navigation::GlobalizePoint(const Vector2f& local_point) {
     float range = Euclid2D(local_point.x(), local_point.y());
     float angle_orig = atan2(local_point.y(), local_point.x());
@@ -333,22 +343,22 @@ double CalcVDelta(const double v_0, const double t, const double d) {
     // accelerate for 1 step
     double a_max = 3;
     double a_min = -3;
-    double v_f = v_0 + a_max*t;
-    double x_1 = t*(v_0 + v_f)/2;
-    double t_2 = v_f/-a_min;
-    double x_2 = t_2*(v_f/2);
+    double v_f = v_0 + a_max * t;
+    double x_1 = t * (v_0 + v_f) / 2;
+    double t_2 = v_f / -a_min;
+    double x_2 = t_2 * (v_f / 2);
     if (x_1 + x_2 <= d) {
         v_delta = a_max * t;
     } else {
         // cruise for 1 step
-        x_1 = t*v_0;
-        t_2 = v_0/-a_min;
-        x_2 = t_2*(v_0/2);
+        x_1 = t * v_0;
+        t_2 = v_0 / -a_min;
+        x_2 = t_2 * (v_0 / 2);
         if (x_1 + x_2 <= d) {
             v_delta = 0;
         } else {
             // decelerate for 1 step
-            double a = (v_0 * v_0)/(2*d);
+            double a = (v_0 * v_0) / (2 * d);
             v_delta = -a * t;
         }
     }
@@ -357,7 +367,6 @@ double CalcVDelta(const double v_0, const double t, const double d) {
 
 // Uses local message
 void Navigation::DrawCar(const Vector2f& local_point, uint32_t color, float angle) {
-    // TODO draw car at angle
     Vector2f p1(local_point.x(), local_point.y() + w + angle);
     Vector2f p2(local_point.x() + h, local_point.y() + w);
     Vector2f p3(local_point.x() + h, local_point.y() - w);
@@ -373,8 +382,8 @@ void Navigation::Run() {
         return;
 
     // constants
-    float curv_inc = 0.2;
-    float carrot_dist = 1.0;
+    const float curv_inc = 0.2;
+    float carrot_dist = 1.2;
 
     // relative goal
     Vector2f carrot(carrot_dist, 0.0);
@@ -391,7 +400,6 @@ void Navigation::Run() {
             return;
         }
 
-        //visualization::DrawCross(nav_goal_loc_, .15, 0xFFB8D3, local_viz_msg_);
         if (runs_since_path_calc > 3) {
             CalculatePath();
             runs_since_path_calc = 0;
@@ -416,19 +424,18 @@ void Navigation::Run() {
 
     // evaluate possible paths
     float best_curv = 0;
-    float best_score = -9999.0;
+    float best_score = -std::numeric_limits<float>::max();
     float best_fpl = 0;
 
     for (float curv = -1; curv <= 1; curv += curv_inc) {
-        float fpl;
+        float fpl = carrot_dist;
         float clearance = .2;
-        float carrot_dist;
+        //float carrot_dist;
         Vector2f dest;
 
         if (abs(curv) < .05) {
             curv = 0;
             // going straight
-            fpl = 3;
             for (Vector2f point : point_cloud)
                 if (abs(point.y()) <= w)
                     fpl = std::min(fpl, point.x() - h);
@@ -450,7 +457,7 @@ void Navigation::Run() {
             }
 
             // Assumes goal is straight ahead dist meters
-            fpl = abs(r) * atan2(carrot_dist, abs(r));
+            fpl = r * atan2(carrot_dist, r);
             double r_1 = r - w;
             double r_2 = Euclid2D(r + w, h);
             double omega = atan2(h, r - w);
@@ -508,24 +515,24 @@ void Navigation::Run() {
             dest = Vector2f(dest_x, dest_y);
             carrot_dist = Euclid2D(dest_x - carrot.x(), dest_y - carrot.y());
         }
+
         float w1 = 0.1;
-        float w2 = -7.5;
+        float w2 = -5;
         float score = fpl + w1 * clearance + w2 * carrot_dist;
-        //std::cout << "curv " << curv << " fpl " << fpl << " clearance " << clearance << " carrot_dist " << carrot_dist << "\n";
+        std::cout << "curv " << curv << " fpl " << fpl << " clearance " << clearance << " carrot_dist " << carrot_dist << "\n";
         if (score > best_score) {
             best_score = score;
             best_curv = curv;
             best_fpl = fpl;
         }
         visualization::DrawPathOption(curv, fpl, clearance, local_viz_msg_);
-        //DrawCar(dest, 0xFF00FF);
     }
 
     visualization::DrawPathOption(best_curv, best_fpl, 0, local_viz_msg_);
     viz_pub_.publish(local_viz_msg_);
     if (best_fpl <= 0.01)
         return;
-    // 1d TOC
+    // 1D TOC
     double t = 1.0/20.0;
     double v_0 = Euclid2D(robot_vel_.x(), robot_vel_.y());
     double v_delta;
@@ -533,9 +540,8 @@ void Navigation::Run() {
     float d = best_fpl;
     v_delta = CalcVDelta(v_0, t, d);
     // account for latency
-    // TODO: have other calculations account for latency as well
-    double latency = .05;
-    d = best_fpl - (v_0 +(v_delta)/2) * latency;
+    double latency = 0.05;
+    d = best_fpl - (v_0 + (v_delta) / 2) * latency;
     v_delta = CalcVDelta(v_0, t, d);
 
     double target_v = v_0 + v_delta;
@@ -546,6 +552,7 @@ void Navigation::Run() {
     drive_msg_.velocity = target_v;
     drive_msg_.curvature = best_curv;
     drive_pub_.publish(drive_msg_);
+
   // Create Helper functions here
   // Milestone 1 will fill out part of this class.
   // Milestone 3 will complete the rest of navigation.

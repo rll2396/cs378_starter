@@ -110,6 +110,7 @@ class Navigation {
   int runs_since_path_calc;
   bool nav_goal_set_;
 
+  bool TooCloseToWall(const Eigen::Vector2f vertex_loc);
   std::string GetClosestVertexID(const Eigen::Vector2f point);
   Eigen::Vector2f GlobalizePoint(const Eigen::Vector2f& local_point);
   Eigen::Vector2f LocalizePoint(const Eigen::Vector2f& global_point);

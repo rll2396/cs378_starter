@@ -382,7 +382,8 @@ void Navigation::Run() {
 
     // constants
     const float curv_inc = 0.2;
-    float carrot_dist = 1.2;
+    const float carrot_dist = 1.2;
+    float dist_to_carrot = carrot_dist;
 
     // relative goal
     Vector2f carrot(carrot_dist, 0.0);
@@ -429,7 +430,6 @@ void Navigation::Run() {
     for (float curv = -1; curv <= 1; curv += curv_inc) {
         float fpl = carrot_dist;
         float clearance = .2;
-        //float carrot_dist;
         Vector2f dest;
 
         if (abs(curv) < .05) {
@@ -443,7 +443,7 @@ void Navigation::Run() {
                     // if the point is not behind the car and within the path
                     // calculate clearance
                     clearance = std::min(clearance, abs(point.y()) - w);
-            carrot_dist = Euclid2D(abs(fpl - carrot.x()), carrot.y());
+            dist_to_carrot = Euclid2D(abs(fpl - carrot.x()), carrot.y());
             dest = Vector2f(fpl, 0);
         } else {
             float r = 1.0 / curv;
@@ -451,7 +451,7 @@ void Navigation::Run() {
             bool turn_right = false;
 
             if (r < 0) {
-                r = -1 * r;
+                r = -r;
                 turn_right = true;
             }
 
@@ -468,7 +468,7 @@ void Navigation::Run() {
                     continue;
                 float point_y = point.y();
                 if (turn_right) {
-                    point_y = -1 * point.y();
+                    point_y = -point.y();
                 }
                 //std::cout << "point y AFTER  --- " << point.y() << "\n";
                 double r_point = Euclid2D(point.x(), point_y - r);
@@ -504,15 +504,14 @@ void Navigation::Run() {
                 }
             }
 
-            if (turn_right) {
-                r = -1 * r;
-            }
+            // make r negative again if flipped
+            r = 1.0 / curv;
 
             float rad = fpl / r;
             float dest_x = r * sin(rad);
             float dest_y = r - r * cos(rad);
             dest = Vector2f(dest_x, dest_y);
-            carrot_dist = Euclid2D(dest_x - carrot.x(), dest_y - carrot.y());
+            dist_to_carrot = Euclid2D(dest_x - carrot.x(), dest_y - carrot.y());
         }
 
         float w1 = 0.1;
@@ -522,8 +521,8 @@ void Navigation::Run() {
             float bad_fpl_multiplier = -100;
             fpl = bad_fpl_multiplier * fpl;
         }
-        float score = fpl + w1 * clearance + w2 * carrot_dist;
-        std::cout << "curv " << curv << " fpl " << fpl << " clearance " << clearance << " carrot_dist " << carrot_dist << "\n";
+        float score = fpl + w1 * clearance + w2 * dist_to_carrot;
+        //std::cout << "curv " << curv << " fpl " << fpl << " clearance " << clearance << " dist_to_carrot " << dist_to_carrot << "\n";
         if (score > best_score) {
             best_score = score;
             best_curv = curv;
